@@ -1,10 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import io from 'socket.io-client';
-import { Users, MessageCircle, Coffee, Music, Gamepad2, Book, Smile } from 'lucide-react';
+import {
+  Users,
+  MessageCircle,
+  Coffee,
+  Music,
+  Gamepad2,
+  Book,
+  Smile,
+} from 'lucide-react';
 import './App.css';
 
-// Initialize Socket.IO connection (update URL after deploying backend)
-const socket = io('http://localhost:5000', {
+// ✅ Use environment variable for backend
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+
+// ✅ Initialize Socket.IO once
+const socket = io(BACKEND_URL, {
+  withCredentials: true,
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
@@ -13,47 +25,13 @@ const socket = io('http://localhost:5000', {
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
   const [userStatus, setUserStatus] = useState('chill');
-  const [userId] = useState('user123'); // Replace with actual user ID after auth
+  const [userId] = useState('user123'); // Replace with real auth
+  const [username] = useState('User123'); // Replace with real auth
   const [currentSpot, setCurrentSpot] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [hangoutSpots, setHangoutSpots] = useState([
-    {
-      id: '1',
-      name: 'Chill Café',
-      icon: Coffee,
-      description: 'Low-key conversations & good vibes',
-      activeUsers: 0,
-      mood: 'relaxed',
-      className: 'cafe',
-    },
-    {
-      id: '2',
-      name: 'Music Lounge',
-      icon: Music,
-      description: 'Share tracks, discover new sounds',
-      activeUsers: 0,
-      mood: 'groovy',
-      className: 'music',
-    },
-    {
-      id: '3',
-      name: 'Game Corner',
-      icon: Gamepad2,
-      description: 'Casual gaming & friendly competition',
-      activeUsers: 0,
-      mood: 'energetic',
-      className: 'gaming',
-    },
-    {
-      id: '4',
-      name: 'Study Spot',
-      icon: Book,
-      description: 'Focus together, support each other',
-      activeUsers: 0,
-      mood: 'focused',
-      className: 'study',
-    },
-  ]);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [activeUsers, setActiveUsers] = useState([]);
+  const [hangoutSpots, setHangoutSpots] = useState([]);
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -62,77 +40,139 @@ function App() {
     { id: 'social', label: 'Social', icon: '🤝' },
   ];
 
+  // ✅ Fetch spots from backend
+ const fetchSpots = useCallback(async () => {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/spots`);
+    if (!res.ok) throw new Error(`Failed to fetch spots: ${res.status}`);
+    const data = await res.json();
+    setHangoutSpots(
+      data.map((spot) => ({
+        ...spot,
+        id: spot._id,
+        icon:
+          {
+            'Chill Café': Coffee,
+            'Music Lounge': Music,
+            'Game Corner': Gamepad2,
+            'Study Spot': Book,
+          }[spot.name] || Coffee,
+        className: {
+          'Chill Café': 'cafe',
+          'Music Lounge': 'music', 
+          'Game Corner': 'gaming',
+          'Study Spot': 'study'
+        }[spot.name] || 'default',
+        activeUsers: spot.activeUsers?.length || 0,
+      }))
+    );
+  } catch (err) {
+    console.error(err);
+  }
+}, []);
+
   useEffect(() => {
-    // Fetch initial spots from backend
-    fetch('http://localhost:5000/api/spots')
-      .then((res) => res.json())
-      .then((data) => {
-        setHangoutSpots(
-          data.map((spot) => ({
-            ...spot,
-            icon: { 'Chill Café': Coffee, 'Music Lounge': Music, 'Game Corner': Gamepad2, 'Study Spot': Book }[spot.name],
-            className: spot.mood,
-          }))
-        );
-      })
-      .catch((err) => console.error('Error fetching spots:', err));
+    fetchSpots();
+  }, [fetchSpots]);
 
-    // Socket.IO listeners
-    socket.on('connect', () => {
-      console.log('Connected to Socket.IO server');
-    });
-
-    socket.on('user-joined-spot', ({ userId, spotId }) => {
-      setHangoutSpots((prevSpots) =>
-        prevSpots.map((spot) =>
-          spot.id === spotId ? { ...spot, activeUsers: spot.activeUsers + 1 } : spot
+  // ✅ Setup Socket.IO listeners
+  useEffect(() => {
+    const handleJoin = ({ userId, spotId, username }) => {
+      setHangoutSpots((prev) =>
+        prev.map((spot) =>
+          spot._id === spotId
+            ? { ...spot, activeUsers: spot.activeUsers + 1 }
+            : spot
         )
       );
-    });
+      if (spotId === currentSpot) {
+        setActiveUsers((prev) => [...prev, { userId, username }]);
+      }
+    };
 
-    socket.on('user-left-spot', ({ userId, spotId }) => {
-      setHangoutSpots((prevSpots) =>
-        prevSpots.map((spot) =>
-          spot.id === spotId ? { ...spot, activeUsers: Math.max(0, spot.activeUsers - 1) } : spot
+    const handleLeave = ({ userId, spotId }) => {
+      setHangoutSpots((prev) =>
+        prev.map((spot) =>
+          spot._id === spotId
+            ? { ...spot, activeUsers: Math.max(0, spot.activeUsers - 1) }
+            : spot
         )
       );
-    });
+      if (spotId === currentSpot) {
+        setActiveUsers((prev) => prev.filter((u) => u.userId !== userId));
+      }
+    };
 
-    socket.on('new-message', ({ message, userId, timestamp }) => {
-      setMessages((prev) => [...prev, { message, userId, timestamp }]);
-    });
+    const handleMessage = ({ message, userId, username, timestamp }) => {
+      setMessages((prev) => [...prev, { message, userId, username, timestamp }]);
+    };
 
-    socket.on('disconnect', () => {
-      console.log('Disconnected from Socket.IO server');
-    });
+    const handleTyping = ({ userId, username, spotId }) => {
+      if (spotId === currentSpot) {
+        setTypingUsers((prev) => {
+          if (!prev.some((u) => u.userId === userId)) {
+            return [...prev, { userId, username }];
+          }
+          return prev;
+        });
+        setTimeout(() => {
+          setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+        }, 3000);
+      }
+    };
+
+    socket.on('user-joined-spot', handleJoin);
+    socket.on('user-left-spot', handleLeave);
+    socket.on('new-message', handleMessage);
+    socket.on('typing', handleTyping);
 
     return () => {
-      socket.disconnect();
+      socket.off('user-joined-spot', handleJoin);
+      socket.off('user-left-spot', handleLeave);
+      socket.off('new-message', handleMessage);
+      socket.off('typing', handleTyping);
     };
-  }, []);
+  }, [currentSpot]);
 
-  const joinSpot = (spotId) => {
+  // ✅ Join spot
+  const joinSpot = async (spotId) => {
     if (currentSpot) {
       socket.emit('leave-spot', { spotId: currentSpot, userId });
     }
-    socket.emit('join-spot', { spotId, userId });
+    socket.emit('join-spot', { spotId, userId, username });
     setCurrentSpot(spotId);
-    setMessages([]); // Clear messages when joining a new spot
-    // Fetch message history for the spot (optional)
-    fetch(`http://localhost:5000/api/spots/${spotId}/messages`)
-      .then((res) => res.json())
-      .then((data) => setMessages(data))
-      .catch((err) => console.error('Error fetching messages:', err));
-  };
-
-  const sendMessage = (message) => {
-    if (message && currentSpot) {
-      socket.emit('send-message', { message, spotId: currentSpot, userId });
+    setMessages([]);
+    setActiveUsers([]);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`);
+      if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
+      const data = await res.json();
+      setMessages(data);
+    } catch (err) {
+      console.error(err);
     }
   };
 
+  // ✅ Send message
+  const sendMessage = (message) => {
+    if (message && currentSpot) {
+      socket.emit('send-message', { message, spotId: currentSpot, userId, username });
+    }
+  };
+
+  // ✅ Typing indicator
+  const handleTyping = (e) => {
+    if (e.target.value && currentSpot) {
+      socket.emit('typing', { userId, username, spotId: currentSpot });
+    }
+  };
+
+  // ✅ Spot Card
   const SpotCard = ({ spot }) => (
-    <div className={`spot-card ${spot.className} fade-in`} onClick={() => joinSpot(spot.id)}>
+    <div
+      className={`spot-card ${spot.className} fade-in`}
+      onClick={() => joinSpot(spot._id)}
+    >
       <div className="spot-card-header">
         <div className="spot-card-info">
           <div className="spot-icon">
@@ -155,9 +195,10 @@ function App() {
     </div>
   );
 
+  // ✅ UI
   return (
     <div className="App">
-      {/* Header */}
+      {/* HEADER */}
       <header className="header">
         <div className="header-content">
           <div className="header-title">
@@ -170,13 +211,13 @@ function App() {
               <span>{statusMoods.find((m) => m.id === userStatus)?.label}</span>
             </div>
             <div className="user-avatar">
-              <span>J</span>
+              <span>{username[0] || 'U'}</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Status Bar */}
+      {/* STATUS BAR */}
       <div className="status-bar">
         <p className="status-bar-label">How are you feeling?</p>
         <div className="mood-buttons">
@@ -184,7 +225,9 @@ function App() {
             <button
               key={mood.id}
               onClick={() => setUserStatus(mood.id)}
-              className={`mood-button ${mood.id} ${userStatus === mood.id ? 'active' : ''}`}
+              className={`mood-button ${mood.id} ${
+                userStatus === mood.id ? 'active' : ''
+              }`}
             >
               <span>{mood.icon}</span>
               <span>{mood.label}</span>
@@ -193,7 +236,7 @@ function App() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* MAIN CONTENT */}
       <main className="main-content">
         {activeTab === 'spots' && !currentSpot && (
           <div>
@@ -203,21 +246,8 @@ function App() {
             </div>
             <div className="spots-container">
               {hangoutSpots.map((spot) => (
-                <SpotCard key={spot.id} spot={spot} />
+                <SpotCard key={spot._id} spot={spot} />
               ))}
-            </div>
-            <div className="quick-actions">
-              <h3>Quick Actions</h3>
-              <div className="quick-actions-grid">
-                <button className="quick-action-button">
-                  <MessageCircle size={18} color="#6b7280" />
-                  <span>Start Chat</span>
-                </button>
-                <button className="quick-action-button">
-                  <Users size={18} color="#6b7280" />
-                  <span>Find Friends</span>
-                </button>
-              </div>
             </div>
           </div>
         )}
@@ -225,7 +255,9 @@ function App() {
         {activeTab === 'spots' && currentSpot && (
           <div className="chat-container">
             <div className="section-header">
-              <h2>Chatting in {hangoutSpots.find((s) => s.id === currentSpot)?.name}</h2>
+              <h2>
+                Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name}
+              </h2>
               <button
                 className="back-button"
                 onClick={() => {
@@ -236,10 +268,25 @@ function App() {
                 Back to Spots
               </button>
             </div>
+            <div className="active-users">
+              <p>
+                Active Users:{' '}
+                {activeUsers.map((u) => u.username).join(', ') || 'None'}
+              </p>
+            </div>
+            <div className="typing-indicator">
+              {typingUsers.length > 0 && (
+                <p>
+                  {typingUsers.map((u) => u.username).join(', ')}{' '}
+                  {typingUsers.length > 1 ? 'are' : 'is'} typing...
+                </p>
+              )}
+            </div>
             <div className="messages">
               {messages.map((msg, idx) => (
                 <div key={idx} className="message">
-                  <span className="message-user">{msg.userId}:</span> {msg.message}
+                  <span className="message-user">{msg.username || msg.userId}:</span>{' '}
+                  {msg.message}
                 </div>
               ))}
             </div>
@@ -259,6 +306,7 @@ function App() {
                 name="message"
                 placeholder="Type a message..."
                 className="message-input"
+                onChange={handleTyping}
               />
               <button type="submit" className="send-button">
                 Send
@@ -266,30 +314,9 @@ function App() {
             </form>
           </div>
         )}
-
-        {activeTab === 'chats' && (
-          <div className="section-header">
-            <h2>Your Chats</h2>
-            <p>Recent conversations and active hangouts</p>
-          </div>
-        )}
-
-        {activeTab === 'friends' && (
-          <div className="section-header">
-            <h2>Your Circle</h2>
-            <p>Friends and people you've connected with</p>
-          </div>
-        )}
-
-        {activeTab === 'profile' && (
-          <div className="section-header">
-            <h2>Your Profile</h2>
-            <p>Customize your hangout experience</p>
-          </div>
-        )}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* NAVIGATION */}
       <nav className="bottom-nav">
         <div className="nav-items">
           {[
