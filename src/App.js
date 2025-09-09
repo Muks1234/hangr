@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import io from 'socket.io-client';
 import {
   Users,
@@ -8,30 +10,34 @@ import {
   Gamepad2,
   Book,
   Smile,
+  LogOut,
+  Edit,
+  Trash2,
 } from 'lucide-react';
+import Auth from './Auth';
 import './App.css';
 
-// ✅ Use environment variable for backend
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
-
-// ✅ Initialize Socket.IO once
-const socket = io(BACKEND_URL, {
-  withCredentials: true,
-  reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000,
-});
+// Use environment variable for backend
+export const BACKEND_URL = 'http://localhost:5000' || "https://hangr-backend.onrender.com";
+//export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
   const [userStatus, setUserStatus] = useState('chill');
-  const [userId] = useState('user123'); // Replace with real auth
-  const [username] = useState('User123'); // Replace with real auth
+  const [userId, setUserId] = useState(null);
+  const [username, setUsername] = useState(null);
+  const [token, setToken] = useState(null);
   const [currentSpot, setCurrentSpot] = useState(null);
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [activeUsers, setActiveUsers] = useState([]);
   const [hangoutSpots, setHangoutSpots] = useState([]);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editedMessageText, setEditedMessageText] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const socketRef = useRef(null);
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -40,44 +46,112 @@ function App() {
     { id: 'social', label: 'Social', icon: '🤝' },
   ];
 
-  // ✅ Fetch spots from backend
- const fetchSpots = useCallback(async () => {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/spots`);
-    if (!res.ok) throw new Error(`Failed to fetch spots: ${res.status}`);
-    const data = await res.json();
-    setHangoutSpots(
-      data.map((spot) => ({
-        ...spot,
-        id: spot._id,
-        icon:
-          {
+  // Initialize Socket.IO only once when token is available
+  useEffect(() => {
+    if (token && !socketRef.current) {
+      socketRef.current = io(BACKEND_URL, {
+        withCredentials: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        auth: { token },
+      });
+
+      console.log('Socket.IO initialized, connected:', socketRef.current.connected);
+    }
+  }, [token]);
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    if (location.pathname === '/auth/callback') {
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      const userId = params.get('userId');
+      const username = params.get('username');
+      const mood = params.get('mood');
+      console.log('OAuth callback:', { token, userId, username, mood });
+      if (token && userId && username) {
+        localStorage.setItem('token', token);
+        localStorage.setItem('userId', userId);
+        localStorage.setItem('username', username);
+        localStorage.setItem('mood', mood || 'chill');
+        setToken(token);
+        setUserId(userId);
+        setUsername(username);
+        setUserStatus(mood || 'chill');
+        navigate('/');
+      } else {
+        console.error('Missing OAuth params:', { token, userId, username, mood });
+      }
+    }
+  }, [location, navigate]);
+
+  // Check for existing token on mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedUserId = localStorage.getItem('userId');
+    const storedUsername = localStorage.getItem('username');
+    const storedMood = localStorage.getItem('mood');
+    console.log('Stored credentials:', { storedToken, storedUserId, storedUsername, storedMood });
+    if (storedToken && storedUserId && storedUsername) {
+      setToken(storedToken);
+      setUserId(storedUserId);
+      setUsername(storedUsername);
+      setUserStatus(storedMood || 'chill');
+    } else {
+      console.warn('Incomplete stored credentials');
+    }
+  }, []);
+
+  // Fetch spots from backend
+  const fetchSpots = useCallback(async () => {
+    try {
+      console.log('Fetching spots with token:', token || localStorage.getItem('token'));
+      const res = await fetch(`${BACKEND_URL}/api/spots`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Failed to fetch spots: ${res.status}`);
+      const data = await res.json();
+      console.log('Spots fetched:', data);
+      setHangoutSpots(
+        data.map((spot) => ({
+          ...spot,
+          id: spot._id,
+          icon: {
             'Chill Café': Coffee,
             'Music Lounge': Music,
             'Game Corner': Gamepad2,
             'Study Spot': Book,
           }[spot.name] || Coffee,
-        className: {
-          'Chill Café': 'cafe',
-          'Music Lounge': 'music', 
-          'Game Corner': 'gaming',
-          'Study Spot': 'study'
-        }[spot.name] || 'default',
-        activeUsers: spot.activeUsers?.length || 0,
-      }))
-    );
-  } catch (err) {
-    console.error(err);
-  }
-}, []);
+          className: {
+            'Chill Café': 'cafe',
+            'Music Lounge': 'music',
+            'Game Corner': 'gaming',
+            'Study Spot': 'study',
+          }[spot.name] || 'default',
+          activeUsers: spot.activeUsers?.length || 0,
+        }))
+      );
+    } catch (err) {
+      console.error('Error fetching spots:', err.message);
+    }
+  }, [token]);
 
   useEffect(() => {
-    fetchSpots();
-  }, [fetchSpots]);
+    if (token) fetchSpots();
+  }, [fetchSpots, token]);
 
-  // ✅ Setup Socket.IO listeners
+  // Setup Socket.IO listeners (run once when socket is available)
   useEffect(() => {
+    if (!socketRef.current) {
+      console.warn('Skipping socket listeners: no socket available');
+      return;
+    }
+
+    const socket = socketRef.current;
+
     const handleJoin = ({ userId, spotId, username }) => {
+      console.log('User joined spot:', { userId, spotId, username });
       setHangoutSpots((prev) =>
         prev.map((spot) =>
           spot._id === spotId
@@ -91,6 +165,7 @@ function App() {
     };
 
     const handleLeave = ({ userId, spotId }) => {
+      console.log('User left spot:', { userId, spotId });
       setHangoutSpots((prev) =>
         prev.map((spot) =>
           spot._id === spotId
@@ -103,11 +178,47 @@ function App() {
       }
     };
 
-    const handleMessage = ({ message, userId, username, timestamp }) => {
-      setMessages((prev) => [...prev, { message, userId, username, timestamp }]);
+    const handleMessage = ({ message, userId, username, timestamp, spotId }) => {
+      console.log('Received new message:', { message, userId, username, timestamp, spotId, currentSpot });
+      if (spotId === currentSpot) {
+        setMessages((prev) => {
+          // Find the optimistic message by content and userId
+          const optimisticMsg = prev.find((msg) => msg.message === message && msg.userId === userId && msg.isOptimistic);
+          if (optimisticMsg) {
+            // Replace optimistic message with server version
+            return prev.map((msg) =>
+              msg === optimisticMsg ? { message, userId, username, timestamp } : msg
+            );
+          }
+          // Add new message if not a duplicate
+          if (!prev.some((msg) => msg.message === message && msg.userId === userId && msg.timestamp === timestamp)) {
+            return [...prev, { message, userId, username, timestamp }];
+          }
+          return prev;
+        });
+      } else {
+        console.warn('Message ignored: spotId does not match currentSpot', { spotId, currentSpot });
+      }
+    };
+
+    const handleMessageUpdated = ({ messageId, updatedMessage, timestamp, spotId }) => {
+      if (spotId === currentSpot) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg
+          )
+        );
+      }
+    };
+
+    const handleMessageDeleted = ({ messageId, spotId }) => {
+      if (spotId === currentSpot) {
+        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      }
     };
 
     const handleTyping = ({ userId, username, spotId }) => {
+      console.log('Typing event:', { userId, username, spotId });
       if (spotId === currentSpot) {
         setTypingUsers((prev) => {
           if (!prev.some((u) => u.userId === userId)) {
@@ -124,50 +235,140 @@ function App() {
     socket.on('user-joined-spot', handleJoin);
     socket.on('user-left-spot', handleLeave);
     socket.on('new-message', handleMessage);
+    socket.on('message-updated', handleMessageUpdated);
+    socket.on('message-deleted', handleMessageDeleted);
     socket.on('typing', handleTyping);
+    socket.on('error', ({ message }) => {
+      console.error('Socket error:', message);
+    });
 
     return () => {
       socket.off('user-joined-spot', handleJoin);
       socket.off('user-left-spot', handleLeave);
       socket.off('new-message', handleMessage);
+      socket.off('message-updated', handleMessageUpdated);
+      socket.off('message-deleted', handleMessageDeleted);
       socket.off('typing', handleTyping);
+      socket.off('error');
     };
-  }, [currentSpot]);
+  }, [socketRef, currentSpot]);
 
-  // ✅ Join spot
-  const joinSpot = async (spotId) => {
-    if (currentSpot) {
-      socket.emit('leave-spot', { spotId: currentSpot, userId });
+  // Handle login
+  const handleLogin = ({ userId, username, token, mood }) => {
+    console.log('Login successful:', { userId, username, token, mood });
+    localStorage.setItem('token', token);
+    localStorage.setItem('userId', userId);
+    localStorage.setItem('username', username);
+    localStorage.setItem('mood', mood || 'chill');
+    setToken(token);
+    setUserId(userId);
+    setUsername(username);
+    setUserStatus(mood || 'chill');
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    console.log('Logging out');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    localStorage.removeItem('mood');
+    setToken(null);
+    setUserId(null);
+    setUsername(null);
+    setUserStatus('chill');
+    setCurrentSpot(null);
+    setMessages([]);
+    setActiveUsers([]);
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
-    socket.emit('join-spot', { spotId, userId, username });
+  };
+
+  // Join spot
+  const joinSpot = async (spotId) => {
+    if (!username || !userId || !socketRef.current) {
+      console.error('Cannot join spot: missing username, userId, or socket', { username, userId });
+      return;
+    }
+    console.log('Joining spot:', { spotId, username, userId });
+    if (currentSpot) {
+      socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
+    }
+    socketRef.current.emit('join-spot', { spotId, userId, username });
     setCurrentSpot(spotId);
     setMessages([]);
     setActiveUsers([]);
+    setEditingMessageId(null);
     try {
+      console.log('Fetching messages for spot:', spotId);
       const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`);
       if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
       const data = await res.json();
+      console.log('Messages fetched:', data);
       setMessages(data);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching messages:', err.message);
     }
   };
 
-  // ✅ Send message
+  // Send message
   const sendMessage = (message) => {
-    if (message && currentSpot) {
-      socket.emit('send-message', { message, spotId: currentSpot, userId, username });
+    if (!message || !currentSpot || !username || !userId || !socketRef.current) {
+      console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
+      return;
     }
+    const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; // Unique temp ID
+    const tempTimestamp = new Date().toISOString(); // Temp for optimistic update
+    // Optimistic update: add locally immediately with temp ID and isOptimistic flag
+    setMessages((prev) => [
+      ...prev,
+      { message, userId, username, timestamp: tempTimestamp, _id: tempMessageId, isOptimistic: true },
+    ]);
+    console.log('Sending message:', { message, spotId: currentSpot, userId, username });
+    socketRef.current.emit('send-message', { message, spotId: currentSpot, userId, username });
   };
 
-  // ✅ Typing indicator
+  // Edit message
+  const startEditing = (messageId, currentText) => {
+    setEditingMessageId(messageId);
+    setEditedMessageText(currentText);
+  };
+
+  const saveEdit = (messageId) => {
+    if (!editedMessageText || !currentSpot || !socketRef.current) return;
+    socketRef.current.emit('edit-message', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg._id === messageId ? { ...msg, message: editedMessageText } : msg // Optimistic update
+      )
+    );
+    setEditingMessageId(null);
+    setEditedMessageText('');
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditedMessageText('');
+  };
+
+  // Delete message
+  const deleteMessage = (messageId) => {
+    if (!currentSpot || !socketRef.current) return;
+    socketRef.current.emit('delete-message', { messageId, spotId: currentSpot });
+    setMessages((prev) => prev.filter((msg) => msg._id !== messageId)); // Optimistic delete
+  };
+
+  // Typing indicator
   const handleTyping = (e) => {
-    if (e.target.value && currentSpot) {
-      socket.emit('typing', { userId, username, spotId: currentSpot });
+    if (e.target.value && currentSpot && username && userId && socketRef.current) {
+      console.log('Emitting typing event:', { username, spotId: currentSpot });
+      socketRef.current.emit('typing', { userId, username, spotId: currentSpot });
     }
   };
 
-  // ✅ Spot Card
+  // Spot Card
   const SpotCard = ({ spot }) => (
     <div
       className={`spot-card ${spot.className} fade-in`}
@@ -195,10 +396,18 @@ function App() {
     </div>
   );
 
-  // ✅ UI
+  // Render Auth if not logged in
+  if (!token || !userId || !username) {
+    return (
+      <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+        <Auth onLogin={handleLogin} />
+      </GoogleOAuthProvider>
+    );
+  }
+
+  // Main UI
   return (
     <div className="App">
-      {/* HEADER */}
       <header className="header">
         <div className="header-content">
           <div className="header-title">
@@ -211,13 +420,15 @@ function App() {
               <span>{statusMoods.find((m) => m.id === userStatus)?.label}</span>
             </div>
             <div className="user-avatar">
-              <span>{username[0] || 'U'}</span>
+              <span>{username ? username[0].toUpperCase() : 'U'}</span>
             </div>
+            <button onClick={handleLogout} className="logout-button">
+              <LogOut size={20} color="#6b7280" />
+            </button>
           </div>
         </div>
       </header>
 
-      {/* STATUS BAR */}
       <div className="status-bar">
         <p className="status-bar-label">How are you feeling?</p>
         <div className="mood-buttons">
@@ -236,7 +447,6 @@ function App() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <main className="main-content">
         {activeTab === 'spots' && !currentSpot && (
           <div>
@@ -261,7 +471,9 @@ function App() {
               <button
                 className="back-button"
                 onClick={() => {
-                  socket.emit('leave-spot', { spotId: currentSpot, userId });
+                  if (socketRef.current) {
+                    socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
+                  }
                   setCurrentSpot(null);
                 }}
               >
@@ -282,14 +494,109 @@ function App() {
                 </p>
               )}
             </div>
+            
+            {/* Updated Messages Section with Bubble Chat */}
             <div className="messages">
-              {messages.map((msg, idx) => (
-                <div key={idx} className="message">
-                  <span className="message-user">{msg.username || msg.userId}:</span>{' '}
-                  {msg.message}
-                </div>
-              ))}
+              {messages.map((msg, idx) => {
+                // Format timestamp
+                const formatTime = (timestamp) => {
+                  if (!timestamp) return '';
+                  const date = new Date(timestamp);
+                  const now = new Date();
+                  const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
+                  
+                  if (diffInHours < 24) {
+                    // Show time for today's messages
+                    return date.toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      hour12: true 
+                    });
+                  } else if (diffInHours < 168) {
+                    // Show day and time for this week's messages
+                    return date.toLocaleDateString([], { 
+                      weekday: 'short',
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      hour12: true 
+                    });
+                  } else {
+                    // Show full date for older messages
+                    return date.toLocaleDateString([], { 
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      hour12: true 
+                    });
+                  }
+                };
+
+                return (
+                  <div 
+                    key={msg._id || idx} 
+                    className={`message ${msg.userId === userId ? 'own' : ''}`}
+                  >
+                    <div className="message-bubble">
+                      <span className="message-user">{msg.username || msg.userId}</span>
+                      {editingMessageId === msg._id ? (
+                        <div className="edit-form">
+                          <input
+                            type="text"
+                            value={editedMessageText}
+                            onChange={(e) => setEditedMessageText(e.target.value)}
+                            className="edit-input"
+                            placeholder="Edit your message..."
+                          />
+                          <div className="edit-buttons">
+                            <button onClick={() => saveEdit(msg._id)} className="save-button">
+                              Save
+                            </button>
+                            <button onClick={cancelEdit} className="cancel-button">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="message-text">{msg.message}</span>
+                          <div 
+                            className="message-timestamp"
+                            style={{
+                              fontSize: '10px',
+                              color: msg.userId === userId ? 'rgba(255, 255, 255, 0.7)' : '#9ca3af',
+                              marginTop: '4px',
+                              textAlign: 'right'
+                            }}
+                          >
+                            {formatTime(msg.timestamp)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {msg.userId === userId && (
+                      <div className="message-actions">
+                        <button 
+                          onClick={() => startEditing(msg._id, msg.message)} 
+                          className="edit-action"
+                          title="Edit message"
+                        >
+                          <Edit size={12} />
+                        </button>
+                        <button 
+                          onClick={() => deleteMessage(msg._id)} 
+                          className="delete-action"
+                          title="Delete message"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -316,7 +623,6 @@ function App() {
         )}
       </main>
 
-      {/* NAVIGATION */}
       <nav className="bottom-nav">
         <div className="nav-items">
           {[
