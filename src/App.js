@@ -18,7 +18,7 @@ import Auth from './Auth';
 import './App.css';
 
 // Use environment variable for backend
-export const BACKEND_URL = 'http://localhost:5000' || "https://hangr-backend.onrender.com";
+export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
 //export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
 
 function App() {
