@@ -399,7 +399,7 @@ function App() {
   // Render Auth if not logged in
   if (!token || !userId || !username) {
     return (
-      <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+      <GoogleOAuthProvider clientId={'934486146442-9hj1qubb9bc6nlkuhog6thd8nb3pif2u.apps.googleusercontent.com'}>
         <Auth onLogin={handleLogin} />
       </GoogleOAuthProvider>
     );
