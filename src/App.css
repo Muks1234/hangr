@@ -129,7 +129,7 @@ body {
 .mood-button.chill { background-color: #93c5fd; }
 .mood-button.energetic { background-color: #f59e0b; }
 .mood-button.focused { background-color: #10b981; }
-.mood-button.social { background-color: #ec4899; }
+.mood-button.social { background-color: wheat; }
 
 /* Main content */
 .main-content {
