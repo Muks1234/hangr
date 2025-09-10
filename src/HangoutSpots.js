@@ -287,7 +287,7 @@ function HangoutSpots({ socket, userId, username, onLogout }) {
                 Back to Spots
               </button>
             </div>
-            <div className="active-users">
+            <div className="active-users" style={{ color: 'wheat' }}>
               <p>Active Users: {activeUsers.map((u) => u.username).join(', ') || 'None'}</p>
             </div>
             <div className="typing-indicator">
