@@ -471,7 +471,7 @@ function App() {
               <h2>
                 Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name}
               </h2>
-              <button
+              <button style={{ color: 'white' }}
                 className="back-button"
                 onClick={() => {
                   if (socketRef.current) {
@@ -484,7 +484,7 @@ function App() {
               </button>
             </div>
             <div className="active-users">
-              <p>
+              <p style={{ color: 'white' }}>
                 Active Users:{' '}
                 {activeUsers.map((u) => u.username).join(', ') || 'None'}
               </p>
