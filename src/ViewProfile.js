@@ -1,4 +1,3 @@
-// src/ViewProfile.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Multiavatar from '@multiavatar/multiavatar';
@@ -12,7 +11,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/users/profile/${targetUserId}`, {
+        const res = await fetch(`https://hangr-backend.onrender.com/api/users/profile/${targetUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
@@ -27,7 +26,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
 
     const fetchFriendRequestStatus = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/friends/status', {
+        const res = await fetch('https://hangr-backend.onrender.com/api/friends/status', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -85,21 +84,26 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
       <p><strong>Username:</strong> {profile.username}</p>
       <p><strong>Mood:</strong> {profile.mood}</p>
       <p><strong>Bio:</strong> {profile.bio || 'No bio yet'}</p>
-      {friendRequestStatus === 'none' && (
-        <button onClick={sendFriendRequest} className="join-button">
-          Add Friend
-        </button>
-      )}
-      {friendRequestStatus === 'pending' && <p>Friend request sent</p>}
-      {friendRequestStatus === 'rejected' && (
-        <button onClick={sendFriendRequest} className="join-button">
-          Send Request
-        </button>
-      )}
-      {friendRequestStatus === 'accepted' && (
-        <button onClick={() => navigate(`/chat/${targetUserId}`)} className="join-button">
-          Start Chat
-        </button>
+      {/* Hide friend request buttons/messages when viewing own profile */}
+      {userId !== targetUserId && (
+        <>
+          {friendRequestStatus === 'none' && (
+            <button onClick={sendFriendRequest} className="join-button">
+              Add Friend
+            </button>
+          )}
+          {friendRequestStatus === 'pending' && <p>Friend request sent</p>}
+          {friendRequestStatus === 'rejected' && (
+            <button onClick={sendFriendRequest} className="join-button">
+              Send Request
+            </button>
+          )}
+          {friendRequestStatus === 'accepted' && (
+            <button onClick={() => navigate(`/chat/${targetUserId}`)} className="join-button">
+              Start Chat
+            </button>
+          )}
+        </>
       )}
     </div>
   );

@@ -19,7 +19,7 @@ import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-export const BACKEND_URL = 'http://localhost:5000';
+export const BACKEND_URL = 'https://hangr-backend.onrender.com'||'http://localhost:5000';
 
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
@@ -895,7 +895,7 @@ function App() {
                                 onClick={() => navigate(`/profile/${msg.userId}`)}
                                 style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
                               >
-                                {msg.username || msg.userId}
+                                {msg.sername || msg.userId}
                               </span>
                               {editingMessageId === msg._id ? (
                                 <div className="edit-form">
