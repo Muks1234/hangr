@@ -1338,7 +1338,7 @@ body {
 }
 
 .mood-button.social.active {
-  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  background: linear-gradient(135deg, wheat 0%, wheat 100%);
   box-shadow: 0 12px 40px rgba(236, 72, 153, 0.4);
 }
 
