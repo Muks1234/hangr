@@ -15,23 +15,44 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         const res = await fetch(`http://localhost:5000/api/users/profile/${targetUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Failed to fetch profile');
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const data = await res.json();
         setProfile(data);
       } catch (err) {
         console.error('Error fetching profile:', err.message);
+      }
+    };
+
+    const fetchFriendRequestStatus = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/friends/status', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ senderId: userId, receiverId: targetUserId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFriendRequestStatus(data.status || 'none');
+        } else {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+      } catch (err) {
+        console.error('Error fetching friend request status:', err.message);
       } finally {
         setLoading(false);
       }
     };
-    if (token && targetUserId) fetchProfile();
-  }, [token, targetUserId]);
 
-  const generateAvatar = () => {
-    if (!targetUserId) return '';
-    const svg = Multiavatar(targetUserId);
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-  };
+    if (token && targetUserId) {
+      fetchProfile();
+      fetchFriendRequestStatus();
+    }
+  }, [token, userId, targetUserId]);
 
   const sendFriendRequest = async () => {
     try {
@@ -44,7 +65,8 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         body: JSON.stringify({ senderId: userId, receiverId: targetUserId }),
       });
       if (!res.ok) throw new Error('Failed to send friend request');
-      setFriendRequestStatus('pending');
+      const data = await res.json();
+      setFriendRequestStatus(data.status);
     } catch (err) {
       console.error('Error sending friend request:', err.message);
     }
@@ -69,10 +91,24 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         </button>
       )}
       {friendRequestStatus === 'pending' && <p>Friend request sent</p>}
-      {friendRequestStatus === 'accepted' && <p>Friends!</p>}
-      {friendRequestStatus === 'rejected' && <p>Friend request rejected</p>}
+      {friendRequestStatus === 'rejected' && (
+        <button onClick={sendFriendRequest} className="join-button">
+          Send Request
+        </button>
+      )}
+      {friendRequestStatus === 'accepted' && (
+        <button onClick={() => navigate(`/chat/${targetUserId}`)} className="join-button">
+          Start Chat
+        </button>
+      )}
     </div>
   );
+
+  function generateAvatar() {
+    if (!targetUserId) return '';
+    const svg = Multiavatar(targetUserId);
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
 };
 
 export default ViewProfile;

@@ -2418,3 +2418,537 @@ body {
     box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
   }
 }
+
+
+.badge {
+  background-color: #ef4444;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  margin-left: 5px;
+}
+
+.nav-item {
+  position: relative;
+}
+
+.nav-item .badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+
+/*css for friendss and request  tab*/
+
+/* ============================================================================= 
+   FRIENDS AND FRIEND REQUESTS TAB STYLES - MOBILE FIRST (iPhone SE: 320px)
+   Optimized for smaller screens, then progressive enhancement
+   ============================================================================= */
+
+/* Friends Container */
+.friends-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 4px;
+  box-shadow: 
+    0 6px 20px rgba(31, 38, 135, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  position: relative;
+  overflow: hidden;
+  animation: friendsFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.friends-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c, #667eea);
+  background-size: 300% 100%;
+  animation: friendsGradient 6s ease infinite;
+}
+
+.friends-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.05) 50%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.friends-container:hover::after {
+  opacity: 1;
+}
+
+@keyframes friendsFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes friendsGradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Friends List */
+.friend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.friend-item:last-child {
+  border-bottom: none;
+}
+
+.friend-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+  transition: left 0.4s ease;
+}
+
+.friend-item:hover::before {
+  left: 100%;
+}
+
+.friend-item:hover {
+  background: rgba(102, 126, 234, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.friend-item span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  flex: 1;
+}
+
+/* Friend Requests Section */
+.friend-requests-container {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 6px 20px rgba(31, 38, 135, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.friend-requests-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c, #667eea);
+  background-size: 300% 100%;
+  animation: friendsGradient 6s ease infinite;
+}
+
+/* Friend Request Item */
+.friend-request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.friend-request-item:last-child {
+  border-bottom: none;
+}
+
+.friend-request-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+  transition: left 0.4s ease;
+}
+
+.friend-request-item:hover::before {
+  left: 100%;
+}
+
+.friend-request-item:hover {
+  background: rgba(102, 126, 234, 0.05);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.friend-request-item span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+  margin-right: 8px;
+}
+
+/* Friend Request Buttons */
+.friend-request-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.friend-request-button {
+  border: none;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.friend-request-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.4s ease;
+}
+
+.friend-request-button:hover::before {
+  left: 100%;
+}
+
+.friend-request-button.accept {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+}
+
+.friend-request-button.accept:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.friend-request-button.reject {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  color: #6b7280;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.friend-request-button.reject:hover {
+  background: rgba(248, 113, 113, 0.1);
+  color: #ef4444;
+  border-color: rgba(248, 113, 113, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(248, 113, 113, 0.2);
+}
+
+/* No Friends or Requests Message */
+.no-friends-message,
+.no-requests-message {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 10px;
+  margin: 8px 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================================= 
+   PROGRESSIVE ENHANCEMENT - Larger Mobile (375px+)
+   ============================================================================= */
+
+@media (min-width: 375px) {
+  .friends-container {
+    padding: 14px;
+    margin: 6px;
+    border-radius: 14px;
+  }
+
+  .friend-item,
+  .friend-request-item {
+    padding: 10px 14px;
+  }
+
+  .friend-item span {
+    font-size: 14px;
+  }
+
+  .friend-request-item span {
+    font-size: 13px;
+    margin-right: 10px;
+  }
+
+  .friend-request-button {
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 12px;
+  }
+
+  .friend-request-buttons {
+    gap: 8px;
+  }
+
+  .no-friends-message,
+  .no-requests-message {
+    font-size: 13px;
+    padding: 14px;
+  }
+}
+
+/* ============================================================================= 
+   TABLET AND SMALL DESKTOP (481px+)
+   ============================================================================= */
+
+@media (min-width: 481px) {
+  .friends-container {
+    padding: 20px;
+    margin: 8px auto;
+    max-width: 450px;
+    border-radius: 16px;
+    box-shadow: 
+      0 8px 30px rgba(31, 38, 135, 0.2),
+      0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  }
+
+  .friend-requests-container {
+    padding: 16px;
+    border-radius: 14px;
+    margin-top: 20px;
+  }
+
+  .friend-item,
+  .friend-request-item {
+    padding: 12px 16px;
+  }
+
+  .friend-item span,
+  .friend-request-item span {
+    font-size: 14px;
+  }
+
+  .friend-request-button {
+    font-size: 13px;
+    padding: 8px 16px;
+    border-radius: 12px;
+  }
+
+  .friend-request-buttons {
+    gap: 10px;
+  }
+
+  .no-friends-message,
+  .no-requests-message {
+    font-size: 14px;
+    padding: 16px;
+    margin: 10px 0;
+  }
+}
+
+/* ============================================================================= 
+   LARGER TABLETS AND DESKTOP (769px+)
+   ============================================================================= */
+
+@media (min-width: 769px) {
+  .friends-container {
+    padding: 24px;
+    margin: 12px auto;
+    max-width: 550px;
+    border-radius: 18px;
+    box-shadow: 
+      0 12px 40px rgba(31, 38, 135, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .friends-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 16px 50px rgba(31, 38, 135, 0.3),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .friend-requests-container {
+    padding: 20px;
+    border-radius: 16px;
+    margin-top: 24px;
+  }
+
+  .friend-item,
+  .friend-request-item {
+    padding: 14px 18px;
+  }
+
+  .friend-item span,
+  .friend-request-item span {
+    font-size: 15px;
+  }
+
+  .friend-request-button {
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: 14px;
+  }
+
+  .friend-request-buttons {
+    gap: 12px;
+  }
+
+  .no-friends-message,
+  .no-requests-message {
+    font-size: 15px;
+    padding: 18px;
+    margin: 12px 0;
+  }
+}
+
+/* ============================================================================= 
+   LARGE DESKTOP (1024px+)
+   ============================================================================= */
+
+@media (min-width: 1024px) {
+  .friends-container {
+    padding: 28px;
+    margin: 16px auto;
+    max-width: 650px;
+  }
+
+  .friend-requests-container {
+    padding: 24px;
+    margin-top: 28px;
+  }
+
+  .friend-item:hover,
+  .friend-request-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .friend-request-button {
+    font-size: 15px;
+    padding: 12px 20px;
+  }
+}
+
+
+/* Chats Container */
+.chats-container {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 4px;
+  box-shadow: 
+    0 6px 20px rgba(31, 38, 135, 0.15),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  position: relative;
+  overflow: hidden;
+  animation: friendsFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.chats-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c, #667eea);
+  background-size: 300% 100%;
+  animation: friendsGradient 6s ease infinite;
+}
+
+@media (min-width: 375px) {
+  .chats-container {
+    padding: 14px;
+    margin: 6px;
+    border-radius: 14px;
+  }
+}
+
+@media (min-width: 481px) {
+  .chats-container {
+    padding: 20px;
+    margin: 8px auto;
+    max-width: 450px;
+    border-radius: 16px;
+    box-shadow: 
+      0 8px 30px rgba(31, 38, 135, 0.2),
+      0 1px 0 rgba(255, 255, 255, 0.4) inset;
+  }
+}
+
+@media (min-width: 769px) {
+  .chats-container {
+    padding: 24px;
+    margin: 12px auto;
+    max-width: 550px;
+    border-radius: 18px;
+    box-shadow: 
+      0 12px 40px rgba(31, 38, 135, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+  .chats-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 16px 50px rgba(31, 38, 135, 0.3),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+}
+
+@media (min-width: 1024px) {
+  .chats-container {
+    padding: 28px;
+    margin: 16px auto;
+    max-width: 650px;
+  }
+}
