@@ -19,7 +19,6 @@ import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-// Use environment variable for backend
 export const BACKEND_URL = 'http://localhost:5000';
 
 function App() {
@@ -30,7 +29,9 @@ function App() {
   const [token, setToken] = useState(null);
   const [currentSpot, setCurrentSpot] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [dmMessages, setDmMessages] = useState({});
   const [typingUsers, setTypingUsers] = useState([]);
+  const [dmTypingUsers, setDmTypingUsers] = useState({});
   const [activeUsers, setActiveUsers] = useState([]);
   const [hangoutSpots, setHangoutSpots] = useState([]);
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -127,7 +128,7 @@ function App() {
         setTimeout(() => setToast(null), 5000);
       });
 
-      socketRef.current.on('new-message', ({ message, userId, username, timestamp, spotId }) => {
+      socketRef.current.on('new-message', ({ message, userId, username, timestamp, spotId, _id }) => {
         console.log('Received new message:', { message, userId, username, timestamp, spotId, currentSpot });
         if (spotId === currentSpot) {
           setMessages((prev) => {
@@ -136,7 +137,7 @@ function App() {
             );
             if (optimisticMsg) {
               return prev.map((msg) =>
-                msg === optimisticMsg ? { message, userId, username, timestamp } : msg
+                msg === optimisticMsg ? { message, userId, username, timestamp, _id } : msg
               );
             }
             if (
@@ -144,7 +145,7 @@ function App() {
                 (msg) => msg.message === message && msg.userId === userId && msg.timestamp === timestamp
               )
             ) {
-              return [...prev, { message, userId, username, timestamp }];
+              return [...prev, { message, userId, username, timestamp, _id }];
             }
             return prev;
           });
@@ -185,6 +186,86 @@ function App() {
         }
       });
 
+      socketRef.current.on('new-dm', ({ _id, message, senderId, username, otherUserId, timestamp }) => {
+        console.log('Received new DM:', { _id, message, senderId, username, otherUserId, timestamp });
+        const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
+        setDmMessages((prev) => {
+          const key = senderId === userId ? otherUserId : senderId;
+          const chatMessages = prev[key] || [];
+          const optimisticMsg = chatMessages.find(
+            (msg) => msg.message === message && msg.senderId === senderId && msg.isOptimistic
+          );
+          if (optimisticMsg) {
+            return {
+              ...prev,
+              [key]: chatMessages.map((msg) =>
+                msg === optimisticMsg ? { _id, message, senderId, username, timestamp } : msg
+              ),
+            };
+          }
+          if (
+            !chatMessages.some(
+              (msg) => msg.message === message && msg.senderId === senderId && msg.timestamp === timestamp
+            )
+          ) {
+            return {
+              ...prev,
+              [key]: [...chatMessages, { _id, message, senderId, username, timestamp }],
+            };
+          }
+          return prev;
+        });
+        if (chatUserId !== (senderId === userId ? otherUserId : senderId) && activeTab !== 'chats') {
+          setUnreadMessages((prev) => prev + 1);
+          setToast(`New message from ${username}`);
+          setTimeout(() => setToast(null), 5000);
+        }
+      });
+
+      socketRef.current.on('dm-updated', ({ messageId, updatedMessage, timestamp, otherUserId }) => {
+        console.log('DM updated:', { messageId, updatedMessage, timestamp, otherUserId });
+        setDmMessages((prev) => {
+          const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
+          const chatMessages = prev[key] || [];
+          return {
+            ...prev,
+            [key]: chatMessages.map((msg) =>
+              msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg
+            ),
+          };
+        });
+      });
+
+      socketRef.current.on('dm-deleted', ({ messageId, otherUserId }) => {
+        console.log('DM deleted:', { messageId, otherUserId });
+        setDmMessages((prev) => {
+          const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
+          const chatMessages = prev[key] || [];
+          return {
+            ...prev,
+            [key]: chatMessages.filter((msg) => msg._id !== messageId),
+          };
+        });
+      });
+
+      socketRef.current.on('dm-typing', ({ userId: senderId, username, otherUserId }) => {
+        console.log('DM typing event:', { senderId, username, otherUserId });
+        const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
+        if (chatUserId === (senderId === userId ? otherUserId : senderId)) {
+          setDmTypingUsers((prev) => ({
+            ...prev,
+            [senderId]: { userId: senderId, username },
+          }));
+          setTimeout(() => {
+            setDmTypingUsers((prev) => {
+              const newTypingUsers = { ...prev };
+              delete newTypingUsers[senderId];
+              return newTypingUsers;
+            });
+          }, 3000);
+        }
+      });
+
       socketRef.current.on('user-joined-spot', ({ userId, spotId, username }) => {
         console.log('User joined spot:', { userId, spotId, username });
         setHangoutSpots((prev) =>
@@ -211,6 +292,8 @@ function App() {
 
       socketRef.current.on('error', ({ message }) => {
         console.error('Socket error:', message);
+        setToast(`Error: ${message}`);
+        setTimeout(() => setToast(null), 5000);
       });
     }
 
@@ -225,12 +308,16 @@ function App() {
         socketRef.current.off('message-updated');
         socketRef.current.off('message-deleted');
         socketRef.current.off('typing');
+        socketRef.current.off('new-dm');
+        socketRef.current.off('dm-updated');
+        socketRef.current.off('dm-deleted');
+        socketRef.current.off('dm-typing');
         socketRef.current.off('user-joined-spot');
         socketRef.current.off('user-left-spot');
         socketRef.current.off('error');
       }
     };
-  }, [token, activeTab, currentSpot, userId]);
+  }, [token, activeTab, currentSpot, userId, location]);
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -257,7 +344,7 @@ function App() {
     }
   }, [location, navigate]);
 
-  // Check for existing token and fetch friends and friend requests on mount
+  // Fetch friends and friend requests on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('userId');
@@ -270,7 +357,6 @@ function App() {
       setUsername(storedUsername);
       setUserStatus(storedMood || 'chill');
 
-      // Fetch friends
       const fetchFriends = async () => {
         try {
           console.log('Fetching friends with token:', storedToken);
@@ -288,7 +374,6 @@ function App() {
         }
       };
 
-      // Fetch pending friend requests
       const fetchFriendRequests = async () => {
         try {
           console.log('Fetching friend requests with token:', storedToken);
@@ -319,7 +404,7 @@ function App() {
     }
   }, []);
 
-  // Fetch spots from backend
+  // Fetch spots
   const fetchSpots = useCallback(async () => {
     try {
       console.log('Fetching spots with token:', token || localStorage.getItem('token'));
@@ -383,6 +468,7 @@ function App() {
     setUserStatus('chill');
     setCurrentSpot(null);
     setMessages([]);
+    setDmMessages({});
     setActiveUsers([]);
     setFriends([]);
     setFriendRequests([]);
@@ -420,7 +506,7 @@ function App() {
     }
   };
 
-  // Send message
+  // Send group message
   const sendMessage = (message) => {
     if (!message || !currentSpot || !username || !userId || !socketRef.current) {
       console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
@@ -436,45 +522,98 @@ function App() {
     socketRef.current.emit('send-message', { message, spotId: currentSpot, userId, username });
   };
 
-  // Edit message
+  // Send direct message
+  const sendDm = (message, otherUserId) => {
+    if (!message || !otherUserId || !username || !userId || !socketRef.current) {
+      console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
+      return;
+    }
+    const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tempTimestamp = new Date().toISOString();
+    setDmMessages((prev) => {
+      const chatMessages = prev[otherUserId] || [];
+      return {
+        ...prev,
+        [otherUserId]: [
+          ...chatMessages,
+          { _id: tempMessageId, message, senderId: userId, username, timestamp: tempTimestamp, isOptimistic: true },
+        ],
+      };
+    });
+    console.log('Sending DM:', { message, otherUserId, userId, username });
+    socketRef.current.emit('send-dm', { message, otherUserId, userId, username });
+  };
+
+  // Start editing message
   const startEditing = (messageId, currentText) => {
     setEditingMessageId(messageId);
     setEditedMessageText(currentText);
   };
 
-  const saveEdit = (messageId) => {
-    if (!editedMessageText || !currentSpot || !socketRef.current) return;
-    socketRef.current.emit('edit-message', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg._id === messageId ? { ...msg, message: editedMessageText } : msg
-      )
-    );
+  // Save edited message
+  const saveEdit = (messageId, otherUserId = null) => {
+    if (!editedMessageText || !socketRef.current) return;
+    if (otherUserId) {
+      socketRef.current.emit('edit-dm', { messageId, updatedMessage: editedMessageText, otherUserId });
+      setDmMessages((prev) => {
+        const chatMessages = prev[otherUserId] || [];
+        return {
+          ...prev,
+          [otherUserId]: chatMessages.map((msg) =>
+            msg._id === messageId ? { ...msg, message: editedMessageText } : msg
+          ),
+        };
+      });
+    } else if (currentSpot) {
+      socketRef.current.emit('edit-message', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId ? { ...msg, message: editedMessageText } : msg
+        )
+      );
+    }
     setEditingMessageId(null);
     setEditedMessageText('');
   };
 
+  // Cancel editing
   const cancelEdit = () => {
     setEditingMessageId(null);
     setEditedMessageText('');
   };
 
   // Delete message
-  const deleteMessage = (messageId) => {
-    if (!currentSpot || !socketRef.current) return;
-    socketRef.current.emit('delete-message', { messageId, spotId: currentSpot });
-    setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-  };
-
-  // Typing indicator
-  const handleTyping = (e) => {
-    if (e.target.value && currentSpot && username && userId && socketRef.current) {
-      console.log('Emitting typing event:', { username, spotId: currentSpot });
-      socketRef.current.emit('typing', { userId, username, spotId: currentSpot });
+  const deleteMessage = (messageId, otherUserId = null) => {
+    if (!socketRef.current) return;
+    if (otherUserId) {
+      socketRef.current.emit('delete-dm', { messageId, otherUserId });
+      setDmMessages((prev) => {
+        const chatMessages = prev[otherUserId] || [];
+        return {
+          ...prev,
+          [otherUserId]: chatMessages.filter((msg) => msg._id !== messageId),
+        };
+      });
+    } else if (currentSpot) {
+      socketRef.current.emit('delete-message', { messageId, spotId: currentSpot });
+      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
     }
   };
 
-  // Accept or reject friend request
+  // Handle typing
+  const handleTyping = (e, otherUserId = null) => {
+    if (e.target.value && username && userId && socketRef.current) {
+      if (otherUserId) {
+        console.log('Emitting DM typing event:', { username, otherUserId });
+        socketRef.current.emit('dm-typing', { userId, username, otherUserId });
+      } else if (currentSpot) {
+        console.log('Emitting typing event:', { username, spotId: currentSpot });
+        socketRef.current.emit('typing', { userId, username, spotId: currentSpot });
+      }
+    }
+  };
+
+  // Handle friend request response
   const handleFriendRequestResponse = async (requestId, accept) => {
     try {
       console.log('Responding to friend request:', { requestId, accept, token });
@@ -491,7 +630,6 @@ function App() {
       console.log('Friend request response:', data);
       setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
       if (accept) {
-        // Refetch friends to ensure UI reflects database state
         const fetchFriends = async () => {
           try {
             const res = await fetch(`${BACKEND_URL}/api/friends`, {
@@ -524,7 +662,46 @@ function App() {
     }
   };
 
-  // Spot Card
+  // Fetch DMs for a conversation
+  const fetchDmMessages = useCallback(
+    async (otherUserId) => {
+      if (!token || !otherUserId) return;
+      try {
+        console.log('Fetching DMs for:', { userId, otherUserId });
+        const res = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
+        const data = await res.json();
+        console.log('DMs fetched:', data.messages);
+        setDmMessages((prev) => ({
+          ...prev,
+          [otherUserId]: data.messages.map((msg) => ({
+            _id: msg._id,
+            message: msg.message,
+            senderId: msg.senderId,
+            username: friends.find((f) => f.userId === msg.senderId)?.username || msg.senderId,
+            timestamp: msg.timestamp,
+          })),
+        }));
+      } catch (err) {
+        console.error('Error fetching DMs:', err.message);
+        setToast('Failed to load conversation');
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [token, userId, friends]
+  );
+
+  // Fetch DMs when navigating to /chat/:userId
+  useEffect(() => {
+    if (location.pathname.startsWith('/chat/')) {
+      const otherUserId = location.pathname.split('/')[2];
+      fetchDmMessages(otherUserId);
+    }
+  }, [location, fetchDmMessages]);
+
+  // Spot Card component
   const SpotCard = ({ spot }) => (
     <div
       className={`spot-card ${spot.className} fade-in`}
@@ -842,7 +1019,6 @@ function App() {
                     )}
                     <div className="section-header">
                       <h2>Friend Requests</h2>
-                      {console.log('Current friendRequests:', friendRequests)}
                     </div>
                     <div className="friend-requests-container">
                       {friendRequests.length === 0 ? (
@@ -925,7 +1101,7 @@ function App() {
                 <div className="section-header">
                   <h2>
                     Chat with{' '}
-                    {friends.find((f) => f.userId === location.pathname.split('/')[2])?.username}
+                    {friends.find((f) => f.userId === location.pathname.split('/')[2])?.username || 'User'}
                   </h2>
                   <button
                     onClick={() => navigate('/')}
@@ -935,15 +1111,125 @@ function App() {
                   </button>
                 </div>
                 <div className="chat-container">
+                  <div className="typing-indicator">
+                    {dmTypingUsers[location.pathname.split('/')[2]] && (
+                      <p>
+                        {dmTypingUsers[location.pathname.split('/')[2]].username} is typing...
+                      </p>
+                    )}
+                  </div>
                   <div className="messages">
-                    {/* Placeholder for chat messages */}
+                    {(dmMessages[location.pathname.split('/')[2]] || []).map((msg, idx) => {
+                      const formatTime = (timestamp) => {
+                        if (!timestamp) return '';
+                        const date = new Date(timestamp);
+                        const now = new Date();
+                        const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
+
+                        if (diffInHours < 24) {
+                          return date.toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } else if (diffInHours < 168) {
+                          return date.toLocaleDateString([], {
+                            weekday: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } else {
+                          return date.toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={msg._id || idx}
+                          className={`message ${msg.senderId === userId ? 'own' : ''}`}
+                        >
+                          <div className="message-bubble">
+                            <span
+                              className="message-user"
+                              onClick={() => navigate(`/profile/${msg.senderId}`)}
+                              style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
+                            >
+                              {msg.username || msg.senderId}
+                            </span>
+                            {editingMessageId === msg._id ? (
+                              <div className="edit-form">
+                                <input
+                                  type="text"
+                                  value={editedMessageText}
+                                  onChange={(e) => setEditedMessageText(e.target.value)}
+                                  className="edit-input"
+                                  placeholder="Edit your message..."
+                                />
+                                <div className="edit-buttons">
+                                  <button
+                                    onClick={() => saveEdit(msg._id, location.pathname.split('/')[2])}
+                                    className="save-button"
+                                  >
+                                    Save
+                                  </button>
+                                  <button onClick={cancelEdit} className="cancel-button">
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="message-text">{msg.message}</span>
+                                <div
+                                  className="message-timestamp"
+                                  style={{
+                                    fontSize: '10px',
+                                    color: msg.senderId === userId ? 'rgba(255, 255, 255, 0.7)' : '#9ca3af',
+                                    marginTop: '4px',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {formatTime(msg.timestamp)}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          {msg.senderId === userId && (
+                            <div className="message-actions">
+                              <button
+                                onClick={() => startEditing(msg._id, msg.message)}
+                                className="edit-action"
+                                title="Edit message"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                onClick={() => deleteMessage(msg._id, location.pathname.split('/')[2])}
+                                className="delete-action"
+                                title="Delete message"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
                       const message = e.target.message.value;
-                      if (message) {
-                        sendMessage(message);
+                      const otherUserId = location.pathname.split('/')[2];
+                      if (message && otherUserId) {
+                        sendDm(message, otherUserId);
                         e.target.reset();
                       }
                     }}
@@ -954,6 +1240,7 @@ function App() {
                       name="message"
                       placeholder="Type a message..."
                       className="message-input"
+                      onChange={(e) => handleTyping(e, location.pathname.split('/')[2])}
                     />
                     <button type="submit" className="send-button">
                       Send
