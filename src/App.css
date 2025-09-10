@@ -1826,19 +1826,25 @@ body {
 
 
 /*for profile component*/
-/* Profile Container */
+/* ============================================================================= 
+   ENHANCED PROFILE COMPONENT STYLES - MOBILE FIRST (iPhone SE: 320px)
+   Base styles for smallest screens, then progressive enhancement
+   ============================================================================= */
+
+/* Base styles for iPhone SE (320px) and up */
 .profile-container {
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(30px);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  padding: 28px;
-  max-width: 480px;
-  margin: 0 auto;
-  box-shadow: 0 10px 40px rgba(31, 38, 135, 0.2), 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  border-radius: 16px;
+  padding: 16px;
+  margin: 8px;
+  box-shadow: 
+    0 10px 30px rgba(31, 38, 135, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.5) inset;
   position: relative;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: profileFadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .profile-container::before {
@@ -1846,129 +1852,110 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 50%, transparent 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb, #f5576c, #667eea);
+  background-size: 300% 100%;
+  animation: profileGradient 6s ease infinite;
 }
 
-.profile-container:hover::before {
+.profile-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 0%, rgba(102, 126, 234, 0.05) 50%, transparent 100%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.profile-container:hover::after {
   opacity: 1;
 }
 
-.profile-container:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 60px rgba(31, 38, 135, 0.3), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+@keyframes profileFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* Profile Header */
+@keyframes profileGradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Profile Header - iPhone SE base */
 .profile-container h2 {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 700;
-  background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
+  text-align: center;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-align: center;
-  margin-bottom: 24px;
+  position: relative;
+  z-index: 2;
+  letter-spacing: -0.25px;
+}
+
+/* Profile Avatar - iPhone SE base */
+.profile-avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
   position: relative;
   z-index: 2;
 }
 
-/* Profile Avatar */
-.profile-avatar {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
 .profile-avatar img {
-  width: 120px;
-  height: 120px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  object-fit: cover;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
   border: 3px solid rgba(255, 255, 255, 0.3);
-  transition: all 0.3s ease;
+  box-shadow: 
+    0 10px 30px rgba(102, 126, 234, 0.3),
+    0 0 0 4px rgba(102, 126, 234, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
 
-.profile-avatar img::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transform: rotate(45deg);
-  transition: all 0.3s ease;
-  opacity: 0;
+.profile-avatar:hover img {
+  transform: scale(1.05);
+  box-shadow: 
+    0 15px 40px rgba(102, 126, 234, 0.4),
+    0 0 0 6px rgba(102, 126, 234, 0.15);
 }
 
-.profile-avatar img:hover::before {
-  opacity: 1;
-  animation: avatarShimmer 1.5s ease-in-out;
-}
-
-@keyframes avatarShimmer {
-  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
-}
-
-/* Profile Details (View Mode) */
-.profile-container p {
-  font-size: 16px;
-  color: #64748b;
-  font-weight: 500;
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-}
-
-.profile-container p strong {
-  color: #1e293b;
-  font-weight: 600;
-  margin-right: 8px;
-}
-
-/* Edit Mode Inputs */
+/* Form Elements - iPhone SE base */
 .profile-container input,
 .profile-container select,
 .profile-container textarea {
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  border: 2px solid rgba(229, 231, 235, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(15px);
   color: #1f2937;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
+  font-family: inherit;
   margin-bottom: 12px;
-}
-
-.profile-container input:focus,
-.profile-container select:focus,
-.profile-container textarea:focus {
-  border-color: #667eea;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  transform: translateY(-2px);
-}
-
-.profile-container textarea {
-  min-height: 80px;
-  resize: vertical;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .profile-container input::placeholder,
@@ -1977,25 +1964,81 @@ body {
   font-weight: 400;
 }
 
-/* Edit Buttons */
-.profile-container button {
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  position: relative;
-  overflow: hidden;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-right: 12px;
+.profile-container input:focus,
+.profile-container select:focus,
+.profile-container textarea:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    0 0 0 3px rgba(102, 126, 234, 0.1),
+    0 4px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
 }
 
-.profile-container button:last-child {
-  margin-right: 0;
+.profile-container select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  padding-right: 40px;
+}
+
+.profile-container textarea {
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+/* Profile Display - iPhone SE base */
+.profile-container p {
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 2;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.profile-container p:last-of-type {
+  border-bottom: none;
+  margin-bottom: 20px;
+}
+
+.profile-container p strong {
+  color: #1f2937;
+  font-weight: 700;
+  margin-right: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+}
+
+/* Button Base Styles - iPhone SE */
+.profile-container button {
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  margin: 4px 4px 4px 0;
 }
 
 .profile-container button::before {
@@ -2005,56 +2048,112 @@ body {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transition: left 0.5s ease;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.4s ease;
 }
 
 .profile-container button:hover::before {
   left: 100%;
 }
 
+/* Edit Profile Button - iPhone SE */
 .edit-profile-button {
-  background: linear-gradient(135deg, rgba(100, 116, 139, 0.1) 0%, rgba(100, 116, 139, 0.05) 100%);
-  color: #64748b;
-  border: 1px solid rgba(100, 116, 139, 0.2);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 20px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  display: block;
+  width: 100%;
+  justify-content: center;
 }
 
 .edit-profile-button:hover {
-  background: linear-gradient(135deg, rgba(100, 116, 139, 0.2) 0%, rgba(100, 116, 139, 0.1) 100%);
-  color: #475569;
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
+/* Save Button - iPhone SE */
 .save-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
+  padding: 10px 16px;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+  flex: 1;
 }
 
 .save-button:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
 }
 
+/* Cancel Button - iPhone SE */
 .cancel-button {
   background: rgba(255, 255, 255, 0.8);
-  color: #64748b;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(15px);
+  color: #6b7280;
+  border: 2px solid rgba(107, 114, 128, 0.2);
+  padding: 10px 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  flex: 1;
 }
 
 .cancel-button:hover {
-  background: rgba(255, 255, 255, 0.9);
-  color: #475569;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  background: rgba(248, 113, 113, 0.1);
+  color: #ef4444;
+  border-color: rgba(248, 113, 113, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(248, 113, 113, 0.2);
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 480px) {
+/* Button Container for Edit Mode - iPhone SE */
+.profile-container > div:has(button.save-button) > div:last-child {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Loading State - iPhone SE */
+.profile-container .loading {
+  font-size: 16px;
+  font-weight: 600;
+  color: #64748b;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  position: relative;
+  padding-right: 25px;
+}
+
+.profile-container .loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid #667eea;
+  border-radius: 50%;
+  animation: profileSpin 1s linear infinite;
+}
+
+@keyframes profileSpin {
+  0% { transform: translateY(-50%) rotate(0deg); }
+  100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+/* ============================================================================= 
+   PROGRESSIVE ENHANCEMENT - Larger Mobile (375px+)
+   ============================================================================= */
+
+@media (min-width: 375px) {
   .profile-container {
     padding: 20px;
-    border-radius: 20px;
-    margin: 0 8px;
+    margin: 12px;
+    border-radius: 18px;
   }
 
   .profile-container h2 {
@@ -2062,49 +2161,260 @@ body {
     margin-bottom: 20px;
   }
 
-  .profile-avatar img {
-    width: 100px;
-    height: 100px;
+  .profile-avatar {
+    margin-bottom: 24px;
   }
 
-  .profile-container p {
-    font-size: 14px;
-    margin-bottom: 10px;
-    padding: 6px 10px;
+  .profile-avatar img {
+    width: 90px;
+    height: 90px;
   }
 
   .profile-container input,
   .profile-container select,
   .profile-container textarea {
-    padding: 10px 12px;
-    font-size: 13px;
-    border-radius: 10px;
-    margin-bottom: 10px;
-  }
-
-  .profile-container textarea {
-    min-height: 60px;
+    padding: 14px 18px;
+    font-size: 15px;
+    margin-bottom: 16px;
   }
 
   .profile-container button {
-    padding: 10px 20px;
-    font-size: 12px;
-    margin-right: 8px;
+    font-size: 15px;
+    border-radius: 14px;
   }
 
-  .profile-container button:last-child {
-    margin-right: 0;
+  .edit-profile-button {
+    padding: 14px 24px;
+  }
+
+  .save-button,
+  .cancel-button {
+    padding: 12px 20px;
   }
 }
 
-/* Tablet Adjustments */
-@media (min-width: 481px) and (max-width: 768px) {
+/* ============================================================================= 
+   TABLET AND SMALL DESKTOP (481px+)
+   ============================================================================= */
+
+@media (min-width: 481px) {
   .profile-container {
-    padding: 24px;
+    padding: 28px;
+    margin: 16px auto;
+    max-width: 500px;
+    border-radius: 20px;
+    box-shadow: 
+      0 15px 45px rgba(31, 38, 135, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .profile-container::before {
+    height: 4px;
+  }
+
+  .profile-container h2 {
+    font-size: 28px;
+    margin-bottom: 28px;
+    letter-spacing: -0.5px;
+  }
+
+  .profile-avatar {
+    margin-bottom: 28px;
   }
 
   .profile-avatar img {
-    width: 110px;
-    height: 110px;
+    width: 100px;
+    height: 100px;
+    border-width: 4px;
+    box-shadow: 
+      0 15px 45px rgba(102, 126, 234, 0.3),
+      0 0 0 6px rgba(102, 126, 234, 0.1);
+  }
+
+  .profile-avatar:hover img {
+    transform: scale(1.08);
+    box-shadow: 
+      0 20px 60px rgba(102, 126, 234, 0.4),
+      0 0 0 8px rgba(102, 126, 234, 0.15);
+  }
+
+  .profile-container input,
+  .profile-container select,
+  .profile-container textarea {
+    padding: 16px 20px;
+    font-size: 16px;
+    border-radius: 14px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  }
+
+  .profile-container textarea {
+    min-height: 90px;
+  }
+
+  .profile-container p {
+    font-size: 15px;
+    margin-bottom: 14px;
+    padding: 10px 0;
+  }
+
+  .profile-container button {
+    font-size: 15px;
+    border-radius: 14px;
+    margin: 6px 6px 6px 0;
+  }
+
+  .edit-profile-button {
+    padding: 16px 28px;
+  }
+
+  .save-button,
+  .cancel-button {
+    padding: 14px 24px;
+  }
+
+  .profile-container > div:has(button.save-button) > div:last-child {
+    gap: 12px;
+    margin-top: 16px;
+  }
+}
+
+/* ============================================================================= 
+   LARGER TABLETS AND DESKTOP (769px+)
+   ============================================================================= */
+
+@media (min-width: 769px) {
+  .profile-container {
+    padding: 36px;
+    margin: 24px auto;
+    max-width: 600px;
+    border-radius: 24px;
+    box-shadow: 
+      0 20px 60px rgba(31, 38, 135, 0.3),
+      0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  }
+
+  .profile-container h2 {
+    font-size: 32px;
+    margin-bottom: 32px;
+  }
+
+  .profile-avatar {
+    margin-bottom: 32px;
+  }
+
+  .profile-avatar img {
+    width: 120px;
+    height: 120px;
+    box-shadow: 
+      0 20px 60px rgba(102, 126, 234, 0.3),
+      0 0 0 8px rgba(102, 126, 234, 0.1);
+  }
+
+  .profile-avatar:hover img {
+    transform: scale(1.1);
+    box-shadow: 
+      0 30px 80px rgba(102, 126, 234, 0.4),
+      0 0 0 12px rgba(102, 126, 234, 0.15);
+  }
+
+  .profile-container input,
+  .profile-container select,
+  .profile-container textarea {
+    padding: 18px 22px;
+    font-size: 16px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+
+  .profile-container textarea {
+    min-height: 100px;
+  }
+
+  .profile-container p {
+    font-size: 16px;
+    margin-bottom: 16px;
+    padding: 12px 0;
+  }
+
+  .profile-container p strong {
+    margin-right: 12px;
+  }
+
+  .profile-container button {
+    font-size: 16px;
+    border-radius: 16px;
+  }
+
+  .edit-profile-button {
+    padding: 18px 32px;
+  }
+
+  .save-button,
+  .cancel-button {
+    padding: 16px 28px;
+  }
+
+  .profile-container > div:has(button.save-button) > div:last-child {
+    gap: 16px;
+    margin-top: 20px;
+    justify-content: center;
+  }
+
+  .save-button,
+  .cancel-button {
+    flex: 0 1 auto;
+    min-width: 140px;
+  }
+}
+
+/* ============================================================================= 
+   LARGE DESKTOP (1024px+)
+   ============================================================================= */
+
+@media (min-width: 1024px) {
+  .profile-container {
+    padding: 40px;
+    margin: 32px auto;
+    max-width: 700px;
+  }
+
+  .profile-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 25px 70px rgba(31, 38, 135, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  }
+
+  .profile-avatar img::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent);
+    transform: rotate(45deg);
+    transition: all 0.3s ease;
+    opacity: 0;
+  }
+
+  .profile-avatar:hover img::before {
+    opacity: 1;
+    animation: avatarShimmer 1.5s ease-in-out;
+  }
+
+  @keyframes avatarShimmer {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+  }
+
+  .profile-container input:hover:not(:focus),
+  .profile-container select:hover:not(:focus),
+  .profile-container textarea:hover:not(:focus) {
+    border-color: rgba(102, 126, 234, 0.5);
+    background: rgba(255, 255, 255, 0.85);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
   }
 }
