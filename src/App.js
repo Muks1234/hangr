@@ -15,11 +15,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import Auth from './Auth';
+import Profile from './Profile'; // New import for Profile component
 import './App.css';
 
 // Use environment variable for backend
-export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
-//export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+export const BACKEND_URL = 'http://localhost:5000' || 'https://hangr-backend.onrender.com';
 
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
@@ -182,15 +182,12 @@ function App() {
       console.log('Received new message:', { message, userId, username, timestamp, spotId, currentSpot });
       if (spotId === currentSpot) {
         setMessages((prev) => {
-          // Find the optimistic message by content and userId
           const optimisticMsg = prev.find((msg) => msg.message === message && msg.userId === userId && msg.isOptimistic);
           if (optimisticMsg) {
-            // Replace optimistic message with server version
             return prev.map((msg) =>
               msg === optimisticMsg ? { message, userId, username, timestamp } : msg
             );
           }
-          // Add new message if not a duplicate
           if (!prev.some((msg) => msg.message === message && msg.userId === userId && msg.timestamp === timestamp)) {
             return [...prev, { message, userId, username, timestamp }];
           }
@@ -321,7 +318,6 @@ function App() {
     }
     const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`; // Unique temp ID
     const tempTimestamp = new Date().toISOString(); // Temp for optimistic update
-    // Optimistic update: add locally immediately with temp ID and isOptimistic flag
     setMessages((prev) => [
       ...prev,
       { message, userId, username, timestamp: tempTimestamp, _id: tempMessageId, isOptimistic: true },
@@ -455,7 +451,6 @@ function App() {
               <p style={{ color: 'white' }}>
                 Drop into any space that matches your vibe
               </p>
-
             </div>
             <div className="spots-container">
               {hangoutSpots.map((spot) => (
@@ -501,7 +496,6 @@ function App() {
             {/* Updated Messages Section with Bubble Chat */}
             <div className="messages">
               {messages.map((msg, idx) => {
-                // Format timestamp
                 const formatTime = (timestamp) => {
                   if (!timestamp) return '';
                   const date = new Date(timestamp);
@@ -509,14 +503,12 @@ function App() {
                   const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
                   
                   if (diffInHours < 24) {
-                    // Show time for today's messages
                     return date.toLocaleTimeString([], { 
                       hour: '2-digit', 
                       minute: '2-digit',
                       hour12: true 
                     });
                   } else if (diffInHours < 168) {
-                    // Show day and time for this week's messages
                     return date.toLocaleDateString([], { 
                       weekday: 'short',
                       hour: '2-digit', 
@@ -524,7 +516,6 @@ function App() {
                       hour12: true 
                     });
                   } else {
-                    // Show full date for older messages
                     return date.toLocaleDateString([], { 
                       month: 'short',
                       day: 'numeric',
@@ -622,6 +613,18 @@ function App() {
                 Send
               </button>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'profile' && (
+          <div>
+            <div className="section-header">
+              <h2>Your Profile</h2>
+            </div>
+            <Profile userId={userId} username={username} token={token} onUpdate={(updated) => {
+              setUsername(updated.username);
+              setUserStatus(updated.mood);
+            }} />
           </div>
         )}
       </main>
