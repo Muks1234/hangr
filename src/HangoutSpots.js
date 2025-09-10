@@ -277,7 +277,7 @@ function HangoutSpots({ socket, userId, username, onLogout }) {
             <div className="section-header">
               <h2>Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name || 'Unknown Spot'}</h2>
               <button
-                className="back-button"
+                className="back-button" style={{ color:  "wheat"}}
                 onClick={() => {
                   console.log('Leaving spot:', currentSpot);
                   socket.emit('leave-spot', { spotId: currentSpot });

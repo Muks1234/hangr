@@ -452,7 +452,10 @@ function App() {
           <div>
             <div className="section-header">
               <h2>Available Hangout Spots</h2>
-              <p>Drop into any space that matches your vibe</p>
+              <p style={{ color: 'white' }}>
+                Drop into any space that matches your vibe
+              </p>
+
             </div>
             <div className="spots-container">
               {hangoutSpots.map((spot) => (
