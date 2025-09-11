@@ -7,6 +7,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
   const [friendRequestStatus, setFriendRequestStatus] = useState('none'); // 'none', 'pending', 'accepted', 'rejected'
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -18,9 +19,17 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         const data = await res.json();
-        setProfile(data);
+        console.log('Profile API response:', data); // Log the response to debug
+        // Handle potential nested data or missing fields
+        setProfile({
+          username: data.username || data.user?.username || '',
+          mood: data.mood || data.user?.mood || '',
+          avatar: data.avatar || data.user?.avatar || '',
+          bio: data.bio || data.user?.bio || 'No bio yet',
+        });
       } catch (err) {
         console.error('Error fetching profile:', err.message);
+        setError('Failed to load profile data');
       }
     };
 
@@ -42,20 +51,22 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         }
       } catch (err) {
         console.error('Error fetching friend request status:', err.message);
-      } finally {
-        setLoading(false);
+        setError('Failed to load friend request status');
       }
     };
 
     if (token && targetUserId) {
-      fetchProfile();
-      fetchFriendRequestStatus();
+      Promise.all([fetchProfile(), fetchFriendRequestStatus()])
+        .then(() => setLoading(false))
+        .catch(() => setLoading(false)); // Ensure loading stops even on error
+    } else {
+      setLoading(false); // Stop loading if no token or targetUserId
     }
   }, [token, userId, targetUserId]);
 
   const sendFriendRequest = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/friends/request', {
+      const res = await fetch('https://hangr-backend.onrender.com/api/friends/request', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -75,15 +86,19 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
     return <div className="profile-container">Loading...</div>;
   }
 
+  if (error) {
+    return <div className="profile-container">Error: {error}</div>;
+  }
+
   return (
     <div className="profile-container">
       <h2>{profile.username}'s Profile</h2>
       <div className="profile-avatar">
         <img src={profile.avatar || generateAvatar()} alt="Avatar" />
       </div>
-      <p><strong>Username:</strong> {profile.username}</p>
-      <p><strong>Mood:</strong> {profile.mood}</p>
-      <p><strong>Bio:</strong> {profile.bio || 'No bio yet'}</p>
+      <p><strong>Username:</strong> {profile.username || 'Unknown User'}</p>
+      <p><strong>Mood:</strong> {profile.mood || 'Not set'}</p>
+      <p><strong>Bio:</strong> {profile.bio}</p>
       {/* Hide friend request buttons/messages when viewing own profile */}
       {userId !== targetUserId && (
         <>

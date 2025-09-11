@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useLocation, useNavigate, Routes, Route } from 'react-router-dom';
+import { useLocation, useNavigate, Routes, Route, useParams } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import io from 'socket.io-client';
 import {
@@ -46,6 +46,7 @@ function App() {
   const [hasFetchedChats, setHasFetchedChats] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { userId: profileUserId } = useParams();
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -67,6 +68,23 @@ function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, dmMessages, scrollToBottom]);
+
+  // Sync activeTab with location
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setActiveTab('spots');
+    } else if (location.pathname.startsWith('/chat/')) {
+      setActiveTab('chats');
+    } else if (location.pathname.startsWith('/profile/')) {
+      setActiveTab('profile');
+    } else if (location.pathname === '/friends') {
+      setActiveTab('friends');
+    } else if (location.pathname === '/profile') {
+      setActiveTab('profile');
+    } else if (location.pathname === '/chats') {
+      setActiveTab('chats');
+    }
+  }, [location.pathname]);
 
   // Fetch username by userId
   const fetchUsername = useCallback(async (userId) => {
@@ -598,6 +616,7 @@ function App() {
     } catch (err) {
       console.error('Error fetching messages:', err.message);
     }
+    navigate('/');
   };
 
   // Handle login
@@ -612,6 +631,7 @@ function App() {
     setUsername(username);
     setUserStatus(mood || 'chill');
     usernameCache.current[userId] = username;
+    navigate('/');
   };
 
   // Handle logout
@@ -639,6 +659,7 @@ function App() {
       socketRef.current = null;
     }
     usernameCache.current = {};
+    navigate('/');
   };
 
   // Send group message
@@ -831,7 +852,7 @@ function App() {
             background: '#4caf50',
             color: 'white',
             padding: '10px 20px',
-            borderRadius: '5px', // Added missing comma here
+            borderRadius: '5px',
             zIndex: 1000,
           }}
         >
@@ -866,9 +887,7 @@ function App() {
             <button
               key={mood.id}
               onClick={() => setUserStatus(mood.id)}
-              className={`mood-button ${mood.id} ${
-                userStatus === mood.id ? 'active' : ''
-              }`}
+              className={`mood-button ${mood.id} ${userStatus === mood.id ? 'active' : ''}`}
             >
               <span>{mood.icon}</span>
               <span>{mood.label}</span>
@@ -882,285 +901,178 @@ function App() {
           <Route
             path="/"
             element={
-              <>
-                {activeTab === 'spots' && !currentSpot && (
-                  <div>
-                    <div className="section-header">
-                      <h2>Available Hangout Spots</h2>
-                      <p style={{ color: 'white' }}>
-                        Drop into any space that matches your vibe
-                      </p>
-                    </div>
-                    <div className="spots-container">
-                      {hangoutSpots.map((spot) => (
-                        <SpotCard key={spot._id} spot={spot} />
-                      ))}
-                    </div>
+              activeTab === 'spots' && !currentSpot ? (
+                <div>
+                  <div className="section-header">
+                    <h2>Available Hangout Spots</h2>
+                    <p style={{ color: 'white' }}>Drop into any space that matches your vibe</p>
                   </div>
-                )}
-
-                {activeTab === 'spots' && currentSpot && (
-                  <div className="chat-container">
-                    <div className="section-header">
-                      <h2>
-                        Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name}
-                      </h2>
-                      <button
-                        style={{ color: 'white' }}
-                        className="back-button"
-                        onClick={() => {
-                          if (socketRef.current) {
-                            socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
-                          }
-                          setCurrentSpot(null);
-                        }}
-                      >
-                        Back to Spots
-                      </button>
-                    </div>
-                    <div className="active-users">
-                      <p style={{ color: 'white' }}>
-                        Active Users:{' '}
-                        {activeUsers.map((u) => u.username).join(', ') || 'None'}
+                  <div className="spots-container">
+                    {hangoutSpots.map((spot) => (
+                      <SpotCard key={spot._id} spot={spot} />
+                    ))}
+                  </div>
+                </div>
+              ) : activeTab === 'spots' && currentSpot ? (
+                <div className="chat-container">
+                  <div className="section-header">
+                    <h2>Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name}</h2>
+                    <button
+                      style={{ color: 'white' }}
+                      className="back-button"
+                      onClick={() => {
+                        if (socketRef.current) {
+                          socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
+                        }
+                        setCurrentSpot(null);
+                        navigate('/');
+                      }}
+                    >
+                      Back to Spots
+                    </button>
+                  </div>
+                  <div className="active-users">
+                    <p style={{ color: 'white' }}>
+                      Active Users: {activeUsers.map((u) => u.username).join(', ') || 'None'}
+                    </p>
+                  </div>
+                  <div className="typing-indicator">
+                    {typingUsers.length > 0 && (
+                      <p>
+                        {typingUsers.map((u) => u.username).join(', ')}{' '}
+                        {typingUsers.length > 1 ? 'are' : 'is'} typing...
                       </p>
-                    </div>
-                    <div className="typing-indicator">
-                      {typingUsers.length > 0 && (
-                        <p>
-                          {typingUsers.map((u) => u.username).join(', ')}{' '}
-                          {typingUsers.length > 1 ? 'are' : 'is'} typing...
-                        </p>
-                      )}
-                    </div>
+                    )}
+                  </div>
 
-                    <div className="messages">
-                      {messages.map((msg, idx) => {
-                        const formatTime = (timestamp) => {
-                          if (!timestamp) return '';
-                          const date = new Date(timestamp);
-                          const now = new Date();
-                          const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
+                  <div className="messages">
+                    {messages.map((msg, idx) => {
+                      const formatTime = (timestamp) => {
+                        if (!timestamp) return '';
+                        const date = new Date(timestamp);
+                        const now = new Date();
+                        const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
 
-                          if (diffInHours < 24) {
-                            return date.toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true,
-                            });
-                          } else if (diffInHours < 168) {
-                            return date.toLocaleDateString([], {
-                              weekday: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true,
-                            });
-                          } else {
-                            return date.toLocaleDateString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: true,
-                            });
-                          }
-                        };
+                        if (diffInHours < 24) {
+                          return date.toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } else if (diffInHours < 168) {
+                          return date.toLocaleDateString([], {
+                            weekday: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        } else {
+                          return date.toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          });
+                        }
+                      };
 
-                        return (
-                          <div
-                            key={msg._id || idx}
-                            className={`message ${msg.userId === userId ? 'own' : ''}`}
-                          >
-                            <div className="message-bubble">
-                              <span
-                                className="message-user"
-                                onClick={() => navigate(`/profile/${msg.userId}`)}
-                                style={{ cursor: 'pointer', color: '#d4af37', textDecoration: 'underline' }}
-                              >
-                                {msg.username || msg.userId}
-                              </span>
-                              {editingMessageId === msg._id ? (
-                                <div className="edit-form">
-                                  <input
-                                    type="text"
-                                    value={editedMessageText}
-                                    onChange={(e) => setEditedMessageText(e.target.value)}
-                                    className="edit-input"
-                                    placeholder="Edit your message..."
-                                  />
-                                  <div className="edit-buttons">
-                                    <button onClick={() => saveEdit(msg._id)} className="save-button">
-                                      Save
-                                    </button>
-                                    <button onClick={cancelEdit} className="cancel-button">
-                                      Cancel
-                                    </button>
-                                  </div>
+                      return (
+                        <div
+                          key={msg._id || idx}
+                          className={`message ${msg.userId === userId ? 'own' : ''}`}
+                        >
+                          <div className="message-bubble">
+                            <span
+                              className="message-user"
+                              onClick={() => navigate(`/profile/${msg.userId}`)}
+                              style={{ cursor: 'pointer', color: '#d4af37', textDecoration: 'underline' }}
+                            >
+                              {msg.username || msg.userId}
+                            </span>
+                            {editingMessageId === msg._id ? (
+                              <div className="edit-form">
+                                <input
+                                  type="text"
+                                  value={editedMessageText}
+                                  onChange={(e) => setEditedMessageText(e.target.value)}
+                                  className="edit-input"
+                                  placeholder="Edit your message..."
+                                />
+                                <div className="edit-buttons">
+                                  <button onClick={() => saveEdit(msg._id)} className="save-button">
+                                    Save
+                                  </button>
+                                  <button onClick={cancelEdit} className="cancel-button">
+                                    Cancel
+                                  </button>
                                 </div>
-                              ) : (
-                                <>
-                                  <span className="message-text">{msg.message}</span>
-                                  <div
-                                    className="message-timestamp"
-                                    style={{
-                                      fontSize: '10px',
-                                      color: msg.userId === userId ? 'rgba(255, 255, 255, 0.7)' : '#9ca3af',
-                                      marginTop: '4px',
-                                      textAlign: 'right',
-                                    }}
-                                  >
-                                    {formatTime(msg.timestamp)}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                            {msg.userId === userId && (
-                              <div className="message-actions">
-                                <button
-                                  onClick={() => startEditing(msg._id, msg.message)}
-                                  className="edit-action"
-                                  title="Edit message"
-                                >
-                                  <Edit size={12} />
-                                </button>
-                                <button
-                                  onClick={() => deleteMessage(msg._id)}
-                                  className="delete-action"
-                                  title="Delete message"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
                               </div>
+                            ) : (
+                              <>
+                                <span className="message-text">{msg.message}</span>
+                                <div
+                                  className="message-timestamp"
+                                  style={{
+                                    fontSize: '10px',
+                                    color: msg.userId === userId ? 'rgba(255, 255, 255, 0.7)' : '#9ca3af',
+                                    marginTop: '4px',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {formatTime(msg.timestamp)}
+                                </div>
+                              </>
                             )}
                           </div>
-                        );
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        const message = e.target.message.value;
-                        if (message) {
-                          sendMessage(message);
-                          e.target.reset();
-                        }
-                      }}
-                      className="chat-form"
-                    >
-                      <input
-                        type="text"
-                        name="message"
-                        placeholder="Type a message..."
-                        className="message-input"
-                        onChange={handleTyping}
-                      />
-                      <button type="submit" className="send-button">
-                        Send
-                      </button>
-                    </form>
-                  </div>
-                )}
-
-                {activeTab === 'profile' && (
-                  <div>
-                    <div className="section-header">
-                      <h2>Your Profile</h2>
-                    </div>
-                    <Profile
-                      userId={userId}
-                      username={username}
-                      token={token}
-                      statusMoods={statusMoods}
-                      onUpdate={(updated) => {
-                        setUsername(updated.username);
-                        setUserStatus(updated.mood);
-                        usernameCache.current[userId] = updated.username;
-                      }}
-                    />
-                  </div>
-                )}
-
-                {activeTab === 'friends' && (
-                  <div className="friends-container">
-                    <div className="section-header">
-                      <h2>Friends</h2>
-                    </div>
-                    {isLoadingFriends ? (
-                      <div className="loading">Loading friends...</div>
-                    ) : friends.length === 0 ? (
-                      <div className="no-friends-message">No friends yet. Start connecting!</div>
-                    ) : (
-                      <div>
-                        {friends.map((friend) => (
-                          <div
-                            key={friend.userId}
-                            onClick={() => navigate(`/chat/${friend.userId}`)}
-                            className="friend-item"
-                          >
-                            <span>{friend.username}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="section-header">
-                      <h2>Friend Requests</h2>
-                    </div>
-                    <div className="friend-requests-container">
-                      {isLoadingFriends ? (
-                        <div className="loading">Loading friend requests...</div>
-                      ) : friendRequests.length === 0 ? (
-                        <div className="no-requests-message">No pending friend requests.</div>
-                      ) : (
-                        friendRequests.map((req) => (
-                          <div key={req.requestId} className="friend-request-item">
-                            <span>{req.senderUsername} sent you a friend request</span>
-                            <div className="friend-request-buttons">
+                          {msg.userId === userId && (
+                            <div className="message-actions">
                               <button
-                                onClick={() => handleFriendRequestResponse(req.requestId, true)}
-                                className="friend-request-button accept"
+                                onClick={() => startEditing(msg._id, msg.message)}
+                                className="edit-action"
+                                title="Edit message"
                               >
-                                Accept
+                                <Edit size={12} />
                               </button>
                               <button
-                                onClick={() => handleFriendRequestResponse(req.requestId, false)}
-                                className="friend-request-button reject"
+                                onClick={() => deleteMessage(msg._id)}
+                                className="delete-action"
+                                title="Delete message"
                               >
-                                Reject
+                                <Trash2 size={12} />
                               </button>
                             </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
                   </div>
-                )}
 
-                {activeTab === 'chats' && (
-                  <div className="chats-container">
-                    <div className="section-header">
-                      <h2>Chats</h2>
-                    </div>
-                    {isLoadingChats ? (
-                      <div className="loading">Loading chats...</div>
-                    ) : friends.length === 0 ? (
-                      <div className="no-friends-message">No friends yet. Start connecting!</div>
-                    ) : (
-                      <div>
-                        {friends.map((friend) => (
-                          <div
-                            key={friend.userId}
-                            onClick={() => navigate(`/chat/${friend.userId}`)}
-                            className="friend-item"
-                          >
-                            <span>{friend.username}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const message = e.target.message.value;
+                      if (message) {
+                        sendMessage(message);
+                        e.target.reset();
+                      }
+                    }}
+                    className="chat-form"
+                  >
+                    <input
+                      type="text"
+                      name="message"
+                      placeholder="Type a message..."
+                      className="message-input"
+                      onChange={handleTyping}
+                    />
+                    <button type="submit" className="send-button">
+                      Send
+                    </button>
+                  </form>
+                </div>
+              ) : null
             }
           />
           <Route
@@ -1178,9 +1090,119 @@ function App() {
                 </div>
                 <ViewProfile
                   userId={userId}
-                  targetUserId={location.pathname.split('/')[2]}
+                  targetUserId={profileUserId}
                   token={token}
+                  fetchUsername={fetchUsername} // Pass fetchUsername to ViewProfile
                 />
+              </main>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <main className="main-content">
+                <div className="section-header">
+                  <h2>Your Profile</h2>
+                </div>
+                <Profile
+                  userId={userId}
+                  username={username}
+                  token={token}
+                  statusMoods={statusMoods}
+                  onUpdate={(updated) => {
+                    setUsername(updated.username);
+                    setUserStatus(updated.mood);
+                    usernameCache.current[userId] = updated.username;
+                  }}
+                />
+              </main>
+            }
+          />
+          <Route
+            path="/friends"
+            element={
+              <main className="main-content">
+                <div className="friends-container">
+                  <div className="section-header">
+                    <h2>Friends</h2>
+                  </div>
+                  {isLoadingFriends ? (
+                    <div className="loading">Loading friends...</div>
+                  ) : friends.length === 0 ? (
+                    <div className="no-friends-message">No friends yet. Start connecting!</div>
+                  ) : (
+                    <div>
+                      {friends.map((friend) => (
+                        <div
+                          key={friend.userId}
+                          onClick={() => navigate(`/chat/${friend.userId}`)}
+                          className="friend-item"
+                        >
+                          <span>{friend.username}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="section-header">
+                    <h2>Friend Requests</h2>
+                  </div>
+                  <div className="friend-requests-container">
+                    {isLoadingFriends ? (
+                      <div className="loading">Loading friend requests...</div>
+                    ) : friendRequests.length === 0 ? (
+                      <div className="no-requests-message">No pending friend requests.</div>
+                    ) : (
+                      friendRequests.map((req) => (
+                        <div key={req.requestId} className="friend-request-item">
+                          <span>{req.senderUsername} sent you a friend request</span>
+                          <div className="friend-request-buttons">
+                            <button
+                              onClick={() => handleFriendRequestResponse(req.requestId, true)}
+                              className="friend-request-button accept"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => handleFriendRequestResponse(req.requestId, false)}
+                              className="friend-request-button reject"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </main>
+            }
+          />
+          <Route
+            path="/chats"
+            element={
+              <main className="main-content">
+                <div className="chats-container">
+                  <div className="section-header">
+                    <h2>Chats</h2>
+                  </div>
+                  {isLoadingChats ? (
+                    <div className="loading">Loading chats...</div>
+                  ) : friends.length === 0 ? (
+                    <div className="no-friends-message">No friends yet. Start connecting!</div>
+                  ) : (
+                    <div>
+                      {friends.map((friend) => (
+                        <div
+                          key={friend.userId}
+                          onClick={() => navigate(`/chat/${friend.userId}`)}
+                          className="friend-item"
+                        >
+                          <span>{friend.username}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </main>
             }
           />
@@ -1347,20 +1369,22 @@ function App() {
       <nav className="bottom-nav">
         <div className="nav-items">
           {[
-            { id: 'spots', label: 'Spots', icon: Coffee },
+            { id: 'spots', label: 'Spots', icon: Coffee, path: '/' },
             {
               id: 'chats',
               label: 'Chats',
               icon: MessageCircle,
               badge: unreadMessages > 0 ? unreadMessages : null,
+              path: '/chats',
             },
             {
               id: 'friends',
               label: 'Friends',
               icon: Users,
               badge: friendRequests.length > 0 ? friendRequests.length : null,
+              path: '/friends',
             },
-            { id: 'profile', label: 'You', icon: Smile },
+            { id: 'profile', label: 'You', icon: Smile, path: '/profile' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -1369,6 +1393,7 @@ function App() {
                 if (tab.id === 'chats' || tab.id === 'friends') {
                   setUnreadMessages(0);
                 }
+                navigate(tab.path);
               }}
               className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
             >
