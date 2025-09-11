@@ -49,6 +49,7 @@ function App() {
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const usernameCache = useRef({}); // Cache for usernames to avoid repeated API calls
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -67,6 +68,25 @@ function App() {
     scrollToBottom();
   }, [messages, dmMessages, scrollToBottom]);
 
+  // Fetch username by userId
+  const fetchUsername = useCallback(async (userId) => {
+    if (usernameCache.current[userId]) {
+      return usernameCache.current[userId];
+    }
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch username: ${res.status}`);
+      const data = await res.json();
+      usernameCache.current[userId] = data.username || userId;
+      return data.username || userId;
+    } catch (err) {
+      console.error('Error fetching username:', err.message);
+      return userId; // Fallback to userId if fetch fails
+    }
+  }, [token]);
+
   // Fetch friends
   const fetchFriends = useCallback(async () => {
     if (!token) return;
@@ -80,6 +100,10 @@ function App() {
       const friendsData = await res.json();
       console.log('Fetched friends:', friendsData);
       setFriends(friendsData);
+      // Update username cache
+      friendsData.forEach((friend) => {
+        usernameCache.current[friend.userId] = friend.username;
+      });
       setHasFetchedFriends(true);
     } catch (err) {
       console.error('Error fetching friends:', err.message);
@@ -127,15 +151,23 @@ function App() {
         if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
         const data = await res.json();
         console.log('DMs fetched:', data.messages);
+        const messagesWithUsernames = await Promise.all(
+          data.messages.map(async (msg) => {
+            const username =
+              friends.find((f) => f.userId === msg.senderId)?.username ||
+              (await fetchUsername(msg.senderId));
+            return {
+              _id: msg._id,
+              message: msg.message,
+              senderId: msg.senderId,
+              username,
+              timestamp: msg.timestamp,
+            };
+          })
+        );
         setDmMessages((prev) => ({
           ...prev,
-          [otherUserId]: data.messages.map((msg) => ({
-            _id: msg._id,
-            message: msg.message,
-            senderId: msg.senderId,
-            username: friends.find((f) => f.userId === msg.senderId)?.username || msg.senderId,
-            timestamp: msg.timestamp,
-          })),
+          [otherUserId]: messagesWithUsernames,
         }));
       } catch (err) {
         console.error('Error fetching DMs:', err.message);
@@ -143,7 +175,7 @@ function App() {
         setTimeout(() => setToast(null), 5000);
       }
     },
-    [token, userId]
+    [token, userId, friends, fetchUsername]
   );
 
   // Fetch data when switching tabs
@@ -199,6 +231,7 @@ function App() {
         });
         setFriendRequests((prev) => {
           if (!prev.some((req) => req.requestId === requestId)) {
+            usernameCache.current[senderId] = senderUsername;
             return [...prev, { senderId, senderUsername, requestId, status: 'pending' }];
           }
           return prev;
@@ -220,6 +253,7 @@ function App() {
         if (senderId === userId) {
           setFriends((prev) => {
             if (!prev.some((friend) => friend.userId === receiverId)) {
+              usernameCache.current[receiverId] = receiverUsername;
               return [...prev, { userId: receiverId, username: receiverUsername }];
             }
             return prev;
@@ -228,6 +262,7 @@ function App() {
         } else if (receiverId === userId) {
           setFriends((prev) => {
             if (!prev.some((friend) => friend.userId === senderId)) {
+              usernameCache.current[senderId] = senderUsername;
               return [...prev, { userId: senderId, username: senderUsername }];
             }
             return prev;
@@ -246,24 +281,25 @@ function App() {
         setTimeout(() => setToast(null), 5000);
       });
 
-      socketRef.current.on('new-message', ({ message, userId, username, timestamp, spotId, _id }) => {
-        console.log('Received new message:', { message, userId, username, timestamp, spotId, currentSpot });
+      socketRef.current.on('new-message', async ({ message, userId: senderId, username, timestamp, spotId, _id }) => {
+        console.log('Received new message:', { message, senderId, username, timestamp, spotId, currentSpot });
+        const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
         if (spotId === currentSpot) {
           setMessages((prev) => {
             const optimisticMsg = prev.find(
-              (msg) => msg.message === message && msg.userId === userId && msg.isOptimistic
+              (msg) => msg.message === message && msg.userId === senderId && msg.isOptimistic
             );
             if (optimisticMsg) {
               return prev.map((msg) =>
-                msg === optimisticMsg ? { message, userId, username, timestamp, _id } : msg
+                msg === optimisticMsg ? { message, userId: senderId, username: resolvedUsername, timestamp, _id } : msg
               );
             }
             if (
               !prev.some(
-                (msg) => msg.message === message && msg.userId === userId && msg.timestamp === timestamp
+                (msg) => msg.message === message && msg.userId === senderId && msg.timestamp === timestamp
               )
             ) {
-              return [...prev, { message, userId, username, timestamp, _id }];
+              return [...prev, { message, userId: senderId, username: resolvedUsername, timestamp, _id }];
             }
             return prev;
           });
@@ -304,8 +340,9 @@ function App() {
         }
       });
 
-      socketRef.current.on('new-dm', ({ _id, message, senderId, username, otherUserId, timestamp }) => {
+      socketRef.current.on('new-dm', async ({ _id, message, senderId, username, otherUserId, timestamp }) => {
         console.log('Received new DM:', { _id, message, senderId, username, otherUserId, timestamp });
+        const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
         const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
         setDmMessages((prev) => {
           const key = senderId === userId ? otherUserId : senderId;
@@ -317,7 +354,7 @@ function App() {
             return {
               ...prev,
               [key]: chatMessages.map((msg) =>
-                msg === optimisticMsg ? { _id, message, senderId, username, timestamp } : msg
+                msg === optimisticMsg ? { _id, message, senderId, username: resolvedUsername, timestamp } : msg
               ),
             };
           }
@@ -328,14 +365,14 @@ function App() {
           ) {
             return {
               ...prev,
-              [key]: [...chatMessages, { _id, message, senderId, username, timestamp }],
+              [key]: [...chatMessages, { _id, message, senderId, username: resolvedUsername, timestamp }],
             };
           }
           return prev;
         });
         if (chatUserId !== (senderId === userId ? otherUserId : senderId) && activeTab !== 'chats') {
           setUnreadMessages((prev) => prev + 1);
-          setToast(`New message from ${username}`);
+          setToast(`New message from ${resolvedUsername}`);
           setTimeout(() => setToast(null), 5000);
         }
       });
@@ -474,6 +511,7 @@ function App() {
       setUserId(storedUserId);
       setUsername(storedUsername);
       setUserStatus(storedMood || 'chill');
+      usernameCache.current[storedUserId] = storedUsername;
       setIsLoadingFriends(true);
       Promise.all([fetchFriends(), fetchFriendRequests()])
         .catch((err) => console.error('Error fetching initial data:', err))
@@ -521,6 +559,47 @@ function App() {
     if (token) fetchSpots();
   }, [fetchSpots, token]);
 
+  // Join spot
+  const joinSpot = async (spotId) => {
+    if (!username || !userId || !socketRef.current) {
+      console.error('Cannot join spot: missing username, userId, or socket', { username, userId });
+      return;
+    }
+    console.log('Joining spot:', { spotId, username, userId });
+    if (currentSpot) {
+      socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
+    }
+    socketRef.current.emit('join-spot', { spotId, userId, username });
+    setCurrentSpot(spotId);
+    setMessages([]);
+    setActiveUsers([]);
+    setEditingMessageId(null);
+    try {
+      console.log('Fetching messages for spot:', spotId);
+      const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
+      const data = await res.json();
+      console.log('Messages fetched:', data);
+      const messagesWithUsernames = await Promise.all(
+        data.map(async (msg) => {
+          const resolvedUsername =
+            msg.username ||
+            usernameCache.current[msg.userId] ||
+            (await fetchUsername(msg.userId));
+          return {
+            ...msg,
+            username: resolvedUsername,
+          };
+        })
+      );
+      setMessages(messagesWithUsernames);
+    } catch (err) {
+      console.error('Error fetching messages:', err.message);
+    }
+  };
+
   // Handle login
   const handleLogin = ({ userId, username, token, mood }) => {
     console.log('Login successful:', { userId, username, token, mood });
@@ -532,6 +611,7 @@ function App() {
     setUserId(userId);
     setUsername(username);
     setUserStatus(mood || 'chill');
+    usernameCache.current[userId] = username;
   };
 
   // Handle logout
@@ -558,33 +638,7 @@ function App() {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
-  };
-
-  // Join spot
-  const joinSpot = async (spotId) => {
-    if (!username || !userId || !socketRef.current) {
-      console.error('Cannot join spot: missing username, userId, or socket', { username, userId });
-      return;
-    }
-    console.log('Joining spot:', { spotId, username, userId });
-    if (currentSpot) {
-      socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
-    }
-    socketRef.current.emit('join-spot', { spotId, userId, username });
-    setCurrentSpot(spotId);
-    setMessages([]);
-    setActiveUsers([]);
-    setEditingMessageId(null);
-    try {
-      console.log('Fetching messages for spot:', spotId);
-      const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`);
-      if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
-      const data = await res.json();
-      console.log('Messages fetched:', data);
-      setMessages(data);
-    } catch (err) {
-      console.error('Error fetching messages:', err.message);
-    }
+    usernameCache.current = {};
   };
 
   // Send group message
@@ -1020,6 +1074,7 @@ function App() {
                       onUpdate={(updated) => {
                         setUsername(updated.username);
                         setUserStatus(updated.mood);
+                        usernameCache.current[userId] = updated.username;
                       }}
                     />
                   </div>
