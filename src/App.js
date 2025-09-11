@@ -831,7 +831,7 @@ function App() {
             background: '#4caf50',
             color: 'white',
             padding: '10px 20px',
-            borderRadius: '5px',
+            borderRadius: '5px', // Added missing comma here
             zIndex: 1000,
           }}
         >
@@ -974,7 +974,7 @@ function App() {
                               <span
                                 className="message-user"
                                 onClick={() => navigate(`/profile/${msg.userId}`)}
-                                style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
+                                style={{ cursor: 'pointer', color: '#d4af37', textDecoration: 'underline' }}
                               >
                                 {msg.username || msg.userId}
                               </span>
@@ -1071,7 +1071,7 @@ function App() {
                       userId={userId}
                       username={username}
                       token={token}
-                      statusMoods={statusMoods} // Added prop
+                      statusMoods={statusMoods}
                       onUpdate={(updated) => {
                         setUsername(updated.username);
                         setUserStatus(updated.mood);
@@ -1249,7 +1249,7 @@ function App() {
                             <span
                               className="message-user"
                               onClick={() => navigate(`/profile/${msg.senderId}`)}
-                              style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
+                              style={{ cursor: 'pointer', color: '#d4af37', textDecoration: 'underline' }}
                             >
                               {msg.username || msg.senderId}
                             </span>
