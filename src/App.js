@@ -40,11 +40,15 @@ function App() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [friendRequests, setFriendRequests] = useState([]);
   const [toast, setToast] = useState(null);
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false);
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+  const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
+  const [hasFetchedChats, setHasFetchedChats] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   const socketRef = useRef(null);
-  const messagesEndRef = useRef(null); // Ref for the messages container
+  const messagesEndRef = useRef(null);
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -53,17 +57,118 @@ function App() {
     { id: 'social', label: 'Social', icon: '🤝' },
   ];
 
-  // Scroll to the bottom of the messages container
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, []);
 
-  // Scroll to bottom when messages or dmMessages change
   useEffect(() => {
     scrollToBottom();
   }, [messages, dmMessages, scrollToBottom]);
+
+  // Fetch friends
+  const fetchFriends = useCallback(async () => {
+    if (!token) return;
+    setIsLoadingFriends(true);
+    try {
+      console.log('Fetching friends with token:', token);
+      const res = await fetch(`${BACKEND_URL}/api/friends`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch friends: ${res.status} ${res.statusText}`);
+      const friendsData = await res.json();
+      console.log('Fetched friends:', friendsData);
+      setFriends(friendsData);
+      setHasFetchedFriends(true);
+    } catch (err) {
+      console.error('Error fetching friends:', err.message);
+      setToast('Failed to load friends list');
+      setTimeout(() => setToast(null), 5000);
+    } finally {
+      setIsLoadingFriends(false);
+    }
+  }, [token]);
+
+  // Fetch friend requests
+  const fetchFriendRequests = useCallback(async () => {
+    if (!token) return;
+    try {
+      console.log('Fetching friend requests with token:', token);
+      const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Failed to fetch friend requests: ${res.status} ${res.statusText}`);
+      const requests = await res.json();
+      console.log('Pending friend requests:', requests);
+      setFriendRequests(requests.map((req) => ({
+        senderId: req.senderId,
+        senderUsername: req.senderUsername,
+        requestId: req._id,
+        status: req.status,
+      })));
+      setUnreadMessages((prev) => prev + requests.length);
+    } catch (err) {
+      console.error('Error fetching friend requests:', err.message);
+      setToast('Failed to load friend requests');
+      setTimeout(() => setToast(null), 5000);
+    }
+  }, [token]);
+
+  // Fetch DMs for a conversation
+  const fetchDmMessages = useCallback(
+    async (otherUserId) => {
+      if (!token || !otherUserId) return;
+      try {
+        console.log('Fetching DMs for:', { userId, otherUserId });
+        const res = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
+        const data = await res.json();
+        console.log('DMs fetched:', data.messages);
+        setDmMessages((prev) => ({
+          ...prev,
+          [otherUserId]: data.messages.map((msg) => ({
+            _id: msg._id,
+            message: msg.message,
+            senderId: msg.senderId,
+            username: friends.find((f) => f.userId === msg.senderId)?.username || msg.senderId,
+            timestamp: msg.timestamp,
+          })),
+        }));
+      } catch (err) {
+        console.error('Error fetching DMs:', err.message);
+        setToast('Failed to load conversation');
+        setTimeout(() => setToast(null), 5000);
+      }
+    },
+    [token, userId]
+  );
+
+  // Fetch data when switching tabs
+  useEffect(() => {
+    if (token) {
+      if (activeTab === 'friends' && !hasFetchedFriends) {
+        setIsLoadingFriends(true);
+        Promise.all([fetchFriends(), fetchFriendRequests()])
+          .catch((err) => console.error('Error fetching friends data:', err))
+          .finally(() => setIsLoadingFriends(false));
+      } else if (activeTab === 'chats' && !hasFetchedChats) {
+        setIsLoadingChats(true);
+        fetchFriends()
+          .then(() => {
+            // Fetch DMs for all friends
+            return Promise.all(
+              friends.map((friend) => fetchDmMessages(friend.userId))
+            );
+          })
+          .then(() => setHasFetchedChats(true))
+          .catch((err) => console.error('Error fetching chats data:', err))
+          .finally(() => setIsLoadingChats(false));
+      }
+    }
+  }, [activeTab, token, fetchFriends, fetchFriendRequests, fetchDmMessages, hasFetchedFriends, hasFetchedChats]);
 
   // Initialize Socket.IO and listeners
   useEffect(() => {
@@ -357,7 +462,7 @@ function App() {
     }
   }, [location, navigate]);
 
-  // Fetch friends and friend requests on mount
+  // Fetch initial data on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('userId');
@@ -369,53 +474,14 @@ function App() {
       setUserId(storedUserId);
       setUsername(storedUsername);
       setUserStatus(storedMood || 'chill');
-
-      const fetchFriends = async () => {
-        try {
-          console.log('Fetching friends with token:', storedToken);
-          const res = await fetch(`${BACKEND_URL}/api/friends`, {
-            headers: { Authorization: `Bearer ${storedToken}` },
-          });
-          if (!res.ok) throw new Error(`Failed to fetch friends: ${res.status} ${res.statusText}`);
-          const friendsData = await res.json();
-          console.log('Fetched friends:', friendsData);
-          setFriends(friendsData);
-        } catch (err) {
-          console.error('Error fetching friends:', err.message);
-          setToast('Failed to load friends list');
-          setTimeout(() => setToast(null), 5000);
-        }
-      };
-
-      const fetchFriendRequests = async () => {
-        try {
-          console.log('Fetching friend requests with token:', storedToken);
-          const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
-            headers: { Authorization: `Bearer ${storedToken}` },
-          });
-          if (!res.ok) throw new Error(`Failed to fetch friend requests: ${res.status} ${res.statusText}`);
-          const requests = await res.json();
-          console.log('Pending friend requests:', requests);
-          setFriendRequests(requests.map((req) => ({
-            senderId: req.senderId,
-            senderUsername: req.senderUsername,
-            requestId: req._id,
-            status: req.status,
-          })));
-          setUnreadMessages((prev) => prev + requests.length);
-        } catch (err) {
-          console.error('Error fetching friend requests:', err.message);
-          setToast('Failed to load friend requests');
-          setTimeout(() => setToast(null), 5000);
-        }
-      };
-
-      fetchFriends();
-      fetchFriendRequests();
+      setIsLoadingFriends(true);
+      Promise.all([fetchFriends(), fetchFriendRequests()])
+        .catch((err) => console.error('Error fetching initial data:', err))
+        .finally(() => setIsLoadingFriends(false));
     } else {
       console.warn('Incomplete stored credentials');
     }
-  }, []);
+  }, [fetchFriends, fetchFriendRequests]);
 
   // Fetch spots
   const fetchSpots = useCallback(async () => {
@@ -486,6 +552,8 @@ function App() {
     setFriends([]);
     setFriendRequests([]);
     setUnreadMessages(0);
+    setHasFetchedFriends(false);
+    setHasFetchedChats(false);
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -643,22 +711,7 @@ function App() {
       console.log('Friend request response:', data);
       setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
       if (accept) {
-        const fetchFriends = async () => {
-          try {
-            const res = await fetch(`${BACKEND_URL}/api/friends`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error(`Failed to fetch friends: ${res.status}`);
-            const friendsData = await res.json();
-            console.log('Refetched friends after accept:', friendsData);
-            setFriends(friendsData);
-          } catch (err) {
-            console.error('Error refetching friends:', err.message);
-            setToast('Failed to refresh friends list');
-            setTimeout(() => setToast(null), 5000);
-          }
-        };
-        fetchFriends();
+        fetchFriends(); // Refetch friends to update the list
         const request = friendRequests.find((req) => req.requestId === requestId);
         if (request) {
           setToast(`Added ${request.senderUsername} as a friend`);
@@ -674,45 +727,6 @@ function App() {
       setTimeout(() => setToast(null), 5000);
     }
   };
-
-  // Fetch DMs for a conversation
-  const fetchDmMessages = useCallback(
-    async (otherUserId) => {
-      if (!token || !otherUserId) return;
-      try {
-        console.log('Fetching DMs for:', { userId, otherUserId });
-        const res = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
-        const data = await res.json();
-        console.log('DMs fetched:', data.messages);
-        setDmMessages((prev) => ({
-          ...prev,
-          [otherUserId]: data.messages.map((msg) => ({
-            _id: msg._id,
-            message: msg.message,
-            senderId: msg.senderId,
-            username: friends.find((f) => f.userId === msg.senderId)?.username || msg.senderId,
-            timestamp: msg.timestamp,
-          })),
-        }));
-      } catch (err) {
-        console.error('Error fetching DMs:', err.message);
-        setToast('Failed to load conversation');
-        setTimeout(() => setToast(null), 5000);
-      }
-    },
-    [token, userId, friends]
-  );
-
-  // Fetch DMs when navigating to /chat/:userId
-  useEffect(() => {
-    if (location.pathname.startsWith('/chat/')) {
-      const otherUserId = location.pathname.split('/')[2];
-      fetchDmMessages(otherUserId);
-    }
-  }, [location, fetchDmMessages]);
 
   // Spot Card component
   const SpotCard = ({ spot }) => (
@@ -966,7 +980,7 @@ function App() {
                           </div>
                         );
                       })}
-                      <div ref={messagesEndRef} /> {/* Reference for scrolling */}
+                      <div ref={messagesEndRef} />
                     </div>
 
                     <form
@@ -1016,7 +1030,9 @@ function App() {
                     <div className="section-header">
                       <h2>Friends</h2>
                     </div>
-                    {friends.length === 0 ? (
+                    {isLoadingFriends ? (
+                      <div className="loading">Loading friends...</div>
+                    ) : friends.length === 0 ? (
                       <div className="no-friends-message">No friends yet. Start connecting!</div>
                     ) : (
                       <div>
@@ -1035,7 +1051,9 @@ function App() {
                       <h2>Friend Requests</h2>
                     </div>
                     <div className="friend-requests-container">
-                      {friendRequests.length === 0 ? (
+                      {isLoadingFriends ? (
+                        <div className="loading">Loading friend requests...</div>
+                      ) : friendRequests.length === 0 ? (
                         <div className="no-requests-message">No pending friend requests.</div>
                       ) : (
                         friendRequests.map((req) => (
@@ -1067,7 +1085,9 @@ function App() {
                     <div className="section-header">
                       <h2>Chats</h2>
                     </div>
-                    {friends.length === 0 ? (
+                    {isLoadingChats ? (
+                      <div className="loading">Loading chats...</div>
+                    ) : friends.length === 0 ? (
                       <div className="no-friends-message">No friends yet. Start connecting!</div>
                     ) : (
                       <div>
@@ -1236,7 +1256,7 @@ function App() {
                         </div>
                       );
                     })}
-                    <div ref={messagesEndRef} /> {/* Reference for scrolling */}
+                    <div ref={messagesEndRef} />
                   </div>
                   <form
                     onSubmit={(e) => {
