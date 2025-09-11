@@ -1071,6 +1071,7 @@ function App() {
                       userId={userId}
                       username={username}
                       token={token}
+                      statusMoods={statusMoods} // Added prop
                       onUpdate={(updated) => {
                         setUsername(updated.username);
                         setUserStatus(updated.mood);
