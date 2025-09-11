@@ -2952,3 +2952,127 @@ body {
     max-width: 650px;
   }
 }
+
+/* General reset for consistent rendering */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* App container for full-screen layout */
+.app-container {
+  width: 100%;
+  max-width: 320px; /* Optimized for iPhone SE */
+  margin: 0 auto;
+  padding: 10px;
+  font-family: Arial, sans-serif;
+}
+
+/* Profile container (from ViewProfile.js) */
+.profile-container {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px; /* 11px–13px for iPhone SE */
+}
+.profile-container h2 {
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.profile-avatar img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+}
+.join-button {
+  padding: 10px;
+  font-size: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.join-button:hover {
+  background-color: #0056b3;
+}
+
+/* Chat container for DMs and group chats */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Full viewport height */
+  max-width: 320px; /* iPhone SE width */
+  margin: 0 auto;
+  padding: 10px;
+}
+
+/* Message list */
+.messages {
+  flex: 1;
+  overflow-y: auto; /* Scrollable message list */
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.message {
+  padding: 8px;
+  background-color: #f1f1f1;
+  border-radius: 5px;
+  max-width: 80%;
+  font-size: 12px;
+}
+.message.sent {
+  align-self: flex-end;
+  background-color: #007bff;
+  color: white;
+}
+.message.received {
+  align-self: flex-start;
+}
+
+/* Chat input container (fixed at bottom) */
+.chat-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background-color: #fff;
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  max-width: 320px; /* iPhone SE width */
+  border-top: 1px solid #ddd;
+}
+
+/* Input field to prevent zooming */
+.message-input {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px; /* Prevent browser zoom */
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  outline: none;
+  resize: none; /* For textarea */
+}
+
+/* Send button */
+.send-button {
+  padding: 10px;
+  font-size: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.send-button:hover {
+  background-color: #0056b3;
+}
+
+/* Ensure textarea doesn't resize */
+textarea.message-input {
+  min-height: 40px;
+  max-height: 100px;
+}
