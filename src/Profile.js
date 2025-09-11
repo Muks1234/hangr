@@ -35,7 +35,7 @@ const Profile = ({ userId, username, token, onUpdate }) => {
 
   const handleSave = async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/users/profile', {
+    const res = await fetch('https://hangr-backend.onrender.com/api/users/profile', {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
