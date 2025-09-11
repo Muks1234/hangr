@@ -21,6 +21,19 @@ import './App.css';
 
 export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
 
+// Wrapper component for the profile route to handle useParams
+const ProfileWrapper = ({ userId, token, fetchUsername }) => {
+  const { userId: targetUserId } = useParams(); // Safely call useParams here
+  return (
+    <ViewProfile
+      userId={userId}
+      targetUserId={targetUserId}
+      token={token}
+      fetchUsername={fetchUsername}
+    />
+  );
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
   const [userStatus, setUserStatus] = useState('chill');
@@ -46,7 +59,6 @@ function App() {
   const [hasFetchedChats, setHasFetchedChats] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId: profileUserId } = useParams();
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -208,7 +220,6 @@ function App() {
         setIsLoadingChats(true);
         fetchFriends()
           .then(() => {
-            // Fetch DMs for all friends
             return Promise.all(
               friends.map((friend) => fetchDmMessages(friend.userId))
             );
@@ -1088,11 +1099,10 @@ function App() {
                     Back to Spots
                   </button>
                 </div>
-                <ViewProfile
+                <ProfileWrapper
                   userId={userId}
-                  targetUserId={profileUserId}
                   token={token}
-                  fetchUsername={fetchUsername} // Pass fetchUsername to ViewProfile
+                  fetchUsername={fetchUsername}
                 />
               </main>
             }

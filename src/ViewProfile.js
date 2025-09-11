@@ -10,26 +10,29 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log('useEffect triggered - userId:', userId, 'targetUserId:', targetUserId, 'token:', token); // Debug effect trigger
     const fetchProfile = async () => {
       try {
+        console.log('Fetching profile - TargetUserId:', targetUserId, 'Token:', token); // Detailed request log
         const res = await fetch(`https://hangr-backend.onrender.com/api/users/profile/${targetUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
+          method: 'GET',
         });
+        console.log('Fetch response status:', res.status); // Log status
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         const data = await res.json();
-        console.log('Profile API response:', data); // Log the response to debug
-        // Handle potential nested data or missing fields
+        console.log('Profile API response:', data); // Log full response
         setProfile({
-          username: data.username || data.user?.username || '',
-          mood: data.mood || data.user?.mood || '',
+          username: data.username || data.user?.username || 'Unknown User',
+          mood: data.mood || data.user?.mood || 'Not set',
           avatar: data.avatar || data.user?.avatar || '',
-          bio: data.bio || data.user?.bio || 'No bio yet',
+          bio: data.bio || data.user?.bio || '',
         });
       } catch (err) {
         console.error('Error fetching profile:', err.message);
-        setError('Failed to load profile data');
+        setError(`Failed to load profile data: ${err.message}`);
       }
     };
 
@@ -58,9 +61,10 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
     if (token && targetUserId) {
       Promise.all([fetchProfile(), fetchFriendRequestStatus()])
         .then(() => setLoading(false))
-        .catch(() => setLoading(false)); // Ensure loading stops even on error
+        .catch(() => setLoading(false));
     } else {
-      setLoading(false); // Stop loading if no token or targetUserId
+      console.log('Skipping fetch - token or targetUserId missing:', { token, targetUserId }); // Debug missing data
+      setLoading(false);
     }
   }, [token, userId, targetUserId]);
 
@@ -94,12 +98,11 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
     <div className="profile-container">
       <h2>{profile.username}'s Profile</h2>
       <div className="profile-avatar">
-        <img src={profile.avatar || generateAvatar()} alt="Avatar" />
+        <img src={profile.avatar || generateAvatar() || null} alt="Avatar" />
       </div>
-      <p><strong>Username:</strong> {profile.username || 'Unknown User'}</p>
-      <p><strong>Mood:</strong> {profile.mood || 'Not set'}</p>
+      <p><strong>Username:</strong> {profile.username}</p>
+      <p><strong>Mood:</strong> {profile.mood}</p>
       <p><strong>Bio:</strong> {profile.bio}</p>
-      {/* Hide friend request buttons/messages when viewing own profile */}
       {userId !== targetUserId && (
         <>
           {friendRequestStatus === 'none' && (
@@ -124,7 +127,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
   );
 
   function generateAvatar() {
-    if (!targetUserId) return '';
+    if (!targetUserId) return null;
     const svg = Multiavatar(targetUserId);
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }
