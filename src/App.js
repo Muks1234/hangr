@@ -19,7 +19,7 @@ import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-export const BACKEND_URL = 'https://hangr-backend.onrender.com'||'http://localhost:5000';
+export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
 
 function App() {
   const [activeTab, setActiveTab] = useState('spots');
@@ -44,6 +44,7 @@ function App() {
   const navigate = useNavigate();
 
   const socketRef = useRef(null);
+  const messagesEndRef = useRef(null); // Ref for the messages container
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -51,6 +52,18 @@ function App() {
     { id: 'focused', label: 'Focused', icon: '🎯' },
     { id: 'social', label: 'Social', icon: '🤝' },
   ];
+
+  // Scroll to the bottom of the messages container
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
+  // Scroll to bottom when messages or dmMessages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, dmMessages, scrollToBottom]);
 
   // Initialize Socket.IO and listeners
   useEffect(() => {
@@ -895,7 +908,7 @@ function App() {
                                 onClick={() => navigate(`/profile/${msg.userId}`)}
                                 style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
                               >
-                                {msg.sername || msg.userId}
+                                {msg.username || msg.userId}
                               </span>
                               {editingMessageId === msg._id ? (
                                 <div className="edit-form">
@@ -953,6 +966,7 @@ function App() {
                           </div>
                         );
                       })}
+                      <div ref={messagesEndRef} /> {/* Reference for scrolling */}
                     </div>
 
                     <form
@@ -1222,6 +1236,7 @@ function App() {
                         </div>
                       );
                     })}
+                    <div ref={messagesEndRef} /> {/* Reference for scrolling */}
                   </div>
                   <form
                     onSubmit={(e) => {
