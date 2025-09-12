@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Multiavatar from '@multiavatar/multiavatar';
+import { BACKEND_URL } from './App';
+
 
 const ViewProfile = ({ userId, targetUserId, token }) => {
   const [profile, setProfile] = useState({ username: '', mood: '', avatar: '', bio: '' });
@@ -14,7 +16,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
     const fetchProfile = async () => {
       try {
         console.log('Fetching profile - TargetUserId:', targetUserId, 'Token:', token); // Detailed request log
-        const res = await fetch(`https://hangr-backend.onrender.com/api/users/profile/${targetUserId}`, {
+        const res = await fetch(`${BACKEND_URL}/api/users/profile/${targetUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
           method: 'GET',
         });
@@ -38,7 +40,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
 
     const fetchFriendRequestStatus = async () => {
       try {
-        const res = await fetch('https://hangr-backend.onrender.com/api/friends/status', {
+        const res = await fetch(`${BACKEND_URL}/api/friends/status`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -70,7 +72,7 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
 
   const sendFriendRequest = async () => {
     try {
-      const res = await fetch('https://hangr-backend.onrender.com/api/friends/request', {
+      const res = await fetch(`${BACKEND_URL}/api/friends/request`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
