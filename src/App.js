@@ -422,40 +422,54 @@ function App() {
       }
     });
 
-    socketRef.current.on('user-joined-spot', ({ userId, spotId, username }) => {
+    socketRef.current.on('user-joined-spot', ({ userId: joinedUserId, spotId, username }) => {
       setHangoutSpots((prev) =>
         prev.map((spot) =>
-          spot._id === spotId ? { ...spot, members: [...(spot.members || []), userId] } : spot
+          spot._id === spotId
+            ? {
+                ...spot,
+                members: spot.members.includes(joinedUserId)
+                  ? spot.members
+                  : [...(spot.members || []), joinedUserId],
+              }
+            : spot
         )
       );
       if (spotId === currentSpot) {
         setActiveUsers((prev) => {
-          if (!prev.some((u) => u.userId === userId)) {
-            return [...prev, { userId, username }];
+          if (!prev.some((u) => u.userId === joinedUserId)) {
+            return [...prev, { userId: joinedUserId, username }];
           }
           return prev;
         });
       }
     });
 
-    socketRef.current.on('user-left-spot', ({ userId, spotId }) => {
+    socketRef.current.on('user-left-spot', ({ userId: leftUserId, spotId }) => {
       setHangoutSpots((prev) =>
         prev.map((spot) =>
-          spot._id === spotId ? { ...spot, members: (spot.members || []).filter((id) => id !== userId) } : spot
+          spot._id === spotId
+            ? { ...spot, members: (spot.members || []).filter((id) => id !== leftUserId) }
+            : spot
         )
       );
       if (spotId === currentSpot) {
-        setActiveUsers((prev) => prev.filter((u) => u.userId !== userId));
+        setActiveUsers((prev) => prev.filter((u) => u.userId !== leftUserId));
       }
     });
 
-    socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, location, members, username }) => {
+    socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, location, members, username, creatorId }) => {
       setHangoutSpots((prev) => {
-        const tempSpot = Array.from(pendingSpots.current.entries()).find(
+        // Skip if spot already exists
+        if (prev.some((spot) => spot._id === spotId)) {
+          return prev;
+        }
+        // Check if this is an optimistic spot created by the current user
+        const tempSpotEntry = Array.from(pendingSpots.current.entries()).find(
           ([, spot]) => spot.handle === handle && spot.isOptimistic
         );
-        if (tempSpot) {
-          const [tempId] = tempSpot;
+        if (tempSpotEntry && creatorId === userId) {
+          const [tempId] = tempSpotEntry;
           pendingSpots.current.delete(tempId);
           return prev.map((spot) =>
             spot._id === tempId
@@ -475,28 +489,28 @@ function App() {
               : spot
           );
         }
-        if (!prev.some((spot) => spot._id === spotId)) {
-          return [
-            ...prev,
-            {
-              _id: spotId,
-              id: spotId,
-              name,
-              handle,
-              description,
-              latitude: location?.coordinates?.[1] ?? 0,
-              longitude: location?.coordinates?.[0] ?? 0,
-              distanceInKm: 0, // Updated on next fetchSpots
-              members: members || [],
-              icon: MessageCircle,
-              className: 'default',
-            },
-          ];
-        }
-        return prev;
+        // Add new spot if not created by current user and not already in state
+        return [
+          ...prev,
+          {
+            _id: spotId,
+            id: spotId,
+            name,
+            handle,
+            description,
+            latitude: location?.coordinates?.[1] ?? 0,
+            longitude: location?.coordinates?.[0] ?? 0,
+            distanceInKm: 0,
+            members: members || [],
+            icon: MessageCircle,
+            className: 'default',
+          },
+        ];
       });
-      setToast(`New spot created: ${name} by ${username}`);
-      setTimeout(() => setToast(null), 5000);
+      if (creatorId !== userId) {
+        setToast(`New spot created: ${name} by ${username}`);
+        setTimeout(() => setToast(null), 5000);
+      }
     });
 
     socketRef.current.on('error', ({ message }) => {
@@ -599,11 +613,13 @@ function App() {
           latitude: spot.location?.coordinates?.[1] ?? 0,
           longitude: spot.location?.coordinates?.[0] ?? 0,
           distanceInKm: spot.distanceInKm ?? 0,
-          members: spot.members || [],
+          members: Array.isArray(spot.members) ? spot.members : [],
           icon: MessageCircle,
           className: 'default',
         }))
       );
+      // Clear any pending optimistic spots that might not have been resolved
+      pendingSpots.current.clear();
     } catch (err) {
       console.error('Error fetching nearby spots:', err.message);
       setToast('Failed to load nearby spots');
@@ -632,11 +648,11 @@ function App() {
       latitude: spotData.latitude,
       longitude: spotData.longitude,
       distanceInKm: 0,
-      members: [],
+      members: [userId], // Include creator in members
       icon: MessageCircle,
       className: 'default',
       isOptimistic: true,
-      tempId: tempSpotId, // Store tempId for matching
+      tempId: tempSpotId,
     };
     pendingSpots.current.set(tempSpotId, optimisticSpot);
     setHangoutSpots((prev) => [...prev, optimisticSpot]);
@@ -667,7 +683,7 @@ function App() {
                 latitude: newSpot.location?.coordinates?.[1] ?? 0,
                 longitude: newSpot.location?.coordinates?.[0] ?? 0,
                 distanceInKm: newSpot.distanceInKm ?? 0,
-                members: newSpot.members || [],
+                members: Array.isArray(newSpot.members) ? newSpot.members : [userId],
                 icon: MessageCircle,
                 className: 'default',
               }
@@ -919,7 +935,7 @@ function App() {
       usernameCache.current[userId] = updatedUser.username;
       setToast('Profile updated successfully');
       setTimeout(() => setToast(null), 5000);
-      fetchSpots(); // Refresh spots after location update
+      fetchSpots();
     } catch (err) {
       console.error('Error updating profile:', err.message);
       setToast('Failed to update profile');
@@ -954,7 +970,7 @@ function App() {
         </div>
         <div className="user-count">
           <Users size={14} color="#6b7280" />
-          <span>{spot.members?.length || 0}</span>
+          <span>{Array.isArray(spot.members) ? spot.members.length : 0}</span>
         </div>
       </div>
       <div className="spot-card-footer">
