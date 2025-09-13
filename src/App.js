@@ -15,6 +15,8 @@ import {
 import Auth from './Auth';
 import Profile from './Profile';
 import ViewProfile from './ViewProfile';
+import SearchBar from './SearchBar';
+import SearchResults from './SearchResults';
 import './App.css';
 
 export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
@@ -60,7 +62,7 @@ function App() {
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const usernameCache = useRef({});
-  const pendingSpots = useRef(new Map()); // Track pending optimistic spots
+  const pendingSpots = useRef(new Map());
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -94,6 +96,8 @@ function App() {
       setActiveTab('chats');
     } else if (location.pathname === '/create-spot') {
       setActiveTab('spots');
+    } else if (location.pathname === '/search') {
+      setActiveTab('friends');
     }
   }, [location.pathname]);
 
@@ -233,7 +237,6 @@ function App() {
 
     socketRef.current.on('connect', () => {
       console.log('Socket.IO connected:', socketRef.current.id, 'for userId:', userId);
-      // Rejoin current spot if it exists
       if (currentSpot) {
         console.log('Rejoining spot on connect:', currentSpot);
         socketRef.current.emit('join-spot', { spotId: currentSpot, userId, username });
@@ -332,7 +335,6 @@ function App() {
       const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
       if (spotId === currentSpot) {
         setMessages((prev) => {
-          // Replace optimistic message if it exists
           const optimisticMsg = prev.find((msg) => msg.isOptimistic && msg.userId === senderId && msg.message === message);
           if (optimisticMsg) {
             console.log('Replacing optimistic message:', optimisticMsg._id, 'with:', _id);
@@ -340,7 +342,6 @@ function App() {
               msg === optimisticMsg ? { message, userId: senderId, username: resolvedUsername, timestamp, _id } : msg
             );
           }
-          // Add new message if it doesn't exist
           if (!prev.some((msg) => msg._id === _id)) {
             console.log('Adding new message:', { message, senderId, _id });
             return [...prev, { message, userId: senderId, username: resolvedUsername, timestamp, _id }];
@@ -392,7 +393,6 @@ function App() {
       setDmMessages((prev) => {
         const key = senderId === userId ? otherUserId : senderId;
         const chatMessages = prev[key] || [];
-        // Replace optimistic message if it exists
         const optimisticMsg = chatMessages.find(
           (msg) => msg.isOptimistic && msg.senderId === senderId && msg.message === message
         );
@@ -405,7 +405,6 @@ function App() {
             ),
           };
         }
-        // Add new DM if it doesn't exist
         if (!chatMessages.some((msg) => msg._id === _id)) {
           console.log('Adding new DM:', { _id, message, senderId });
           return {
@@ -508,11 +507,9 @@ function App() {
     socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, location, members, username, creatorId }) => {
       console.log('Received new-spot:', { spotId, name, handle, creatorId });
       setHangoutSpots((prev) => {
-        // Skip if spot already exists
         if (prev.some((spot) => spot._id === spotId)) {
           return prev;
         }
-        // Check if this is an optimistic spot created by the current user
         const tempSpotEntry = Array.from(pendingSpots.current.entries()).find(
           ([, spot]) => spot.handle === handle && spot.isOptimistic
         );
@@ -537,7 +534,6 @@ function App() {
               : spot
           );
         }
-        // Add new spot if not created by current user
         return [
           ...prev,
           {
@@ -758,7 +754,7 @@ function App() {
       socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
     }
     console.log('Joining spot:', spotId);
-    setCurrentSpot(spotId); // Set currentSpot first
+    setCurrentSpot(spotId);
     socketRef.current.emit('join-spot', { spotId, userId, username });
     setMessages([]);
     setActiveUsers([]);
@@ -1100,6 +1096,7 @@ function App() {
             </button>
           ))}
         </div>
+        <SearchBar />
       </div>
 
       <main className="main-content">
@@ -1644,6 +1641,20 @@ function App() {
                     </button>
                   </form>
                 </div>
+              </main>
+            }
+          />
+          <Route
+            path="/search"
+            element={
+              <main className="main-content">
+                <div className="section-header">
+                  <h2>Search Results</h2>
+                  <button onClick={() => navigate('/')} className="back-button">
+                    Back to Spots
+                  </button>
+                </div>
+                <SearchResults token={token} fetchUsername={fetchUsername} />
               </main>
             }
           />
