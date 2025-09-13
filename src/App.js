@@ -17,7 +17,7 @@ import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-export const BACKEND_URL = 'http://localhost:5000';
+export const BACKEND_URL = 'https://hangr-backend.onrender.com'||'http://localhost:5000';
 
 // ProfileWrapper for handling dynamic userId in profile route
 const ProfileWrapper = ({ userId, token, fetchUsername }) => {
@@ -112,7 +112,7 @@ function App() {
         usernameCache.current[id] = data.username || id;
         return data.username || id;
       } catch (err) {
-        console.error('Error fetching username:', err.message);
+        //console.error('Error fetching username:', err.message);
         return id;
       }
     },
@@ -135,7 +135,7 @@ function App() {
       });
       setHasFetchedFriends(true);
     } catch (err) {
-      console.error('Error fetching friends:', err.message);
+      //console.error('Error fetching friends:', err.message);
       setToast('Failed to load friends');
       setTimeout(() => setToast(null), 5000);
     } finally {
@@ -162,7 +162,7 @@ function App() {
       );
       setUnreadMessages((prev) => prev + requests.length);
     } catch (err) {
-      console.error('Error fetching friend requests:', err.message);
+      //console.error('Error fetching friend requests:', err.message);
       setToast('Failed to load friend requests');
       setTimeout(() => setToast(null), 5000);
     }
@@ -192,7 +192,7 @@ function App() {
           [otherUserId]: messagesWithUsernames,
         }));
       } catch (err) {
-        console.error('Error fetching DMs:', err.message);
+        //console.error('Error fetching DMs:', err.message);
         setToast('Failed to load conversation');
         setTimeout(() => setToast(null), 5000);
       }
@@ -235,7 +235,7 @@ function App() {
     });
 
     socketRef.current.on('connect_error', (err) => {
-      console.error('Socket.IO connection error:', err.message);
+      //console.error('Socket.IO connection error:', err.message);
       if (err.message.includes('Token expired')) {
         setToast('Session expired, please log in again');
         localStorage.removeItem('token');
@@ -621,7 +621,7 @@ function App() {
       // Clear any pending optimistic spots that might not have been resolved
       pendingSpots.current.clear();
     } catch (err) {
-      console.error('Error fetching nearby spots:', err.message);
+      //console.error('Error fetching nearby spots:', err.message);
       setToast('Failed to load nearby spots');
       setTimeout(() => setToast(null), 5000);
     }
@@ -694,7 +694,7 @@ function App() {
       setTimeout(() => setToast(null), 5000);
       navigate('/');
     } catch (err) {
-      console.error('Error creating spot:', err.message);
+      //console.error('Error creating spot:', err.message);
       setHangoutSpots((prev) => prev.filter((spot) => spot._id !== tempSpotId));
       pendingSpots.current.delete(tempSpotId);
       setToast(`Failed to create spot: ${err.message}`);
@@ -705,7 +705,7 @@ function App() {
   // Join a spot
   const joinSpot = async (spotId) => {
     if (!username || !userId || !socketRef.current) {
-      console.error('Cannot join spot: missing data', { username, userId });
+      //console.error('Cannot join spot: missing data', { username, userId });
       return;
     }
     if (currentSpot) {
@@ -730,7 +730,7 @@ function App() {
       );
       setMessages(messagesWithUsernames);
     } catch (err) {
-      console.error('Error fetching messages:', err.message);
+      //console.error('Error fetching messages:', err.message);
       setToast('Failed to load messages');
       setTimeout(() => setToast(null), 5000);
     }
@@ -782,7 +782,7 @@ function App() {
   // Send spot message
   const sendMessage = (message) => {
     if (!message || !currentSpot || !username || !userId || !socketRef.current) {
-      console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
+     // console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
       return;
     }
     const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -797,7 +797,7 @@ function App() {
   // Send DM
   const sendDm = (message, otherUserId) => {
     if (!message || !otherUserId || !username || !userId || !socketRef.current) {
-      console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
+     // console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
       return;
     }
     const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -905,7 +905,7 @@ function App() {
       setUnreadMessages((prev) => Math.max(0, prev - 1));
       setTimeout(() => setToast(null), 5000);
     } catch (err) {
-      console.error('Error responding to friend request:', err.message);
+      //console.error('Error responding to friend request:', err.message);
       setToast('Error processing friend request');
       setTimeout(() => setToast(null), 5000);
     }
@@ -937,7 +937,7 @@ function App() {
       setTimeout(() => setToast(null), 5000);
       fetchSpots();
     } catch (err) {
-      console.error('Error updating profile:', err.message);
+     // console.error('Error updating profile:', err.message);
       setToast('Failed to update profile');
       setTimeout(() => setToast(null), 5000);
     }
@@ -957,10 +957,10 @@ function App() {
             </h3>
             <p>{spot.description}</p>
             <p>
-              <strong>Location:</strong>{' '}
+              {/*<strong>Location:</strong>{' '}
               {spot.latitude && spot.longitude
                 ? `${parseFloat(spot.latitude).toFixed(4)}, ${parseFloat(spot.longitude).toFixed(4)}`
-                : 'Unknown'}
+                : 'Unknown'} */}
             </p>
             <p>
               <strong>Distance:</strong>{' '}
@@ -1314,7 +1314,7 @@ function App() {
                             setTimeout(() => setToast(null), 5000);
                           },
                           (error) => {
-                            console.error('Geolocation error:', error.message);
+                            //console.error('Geolocation error:', error.message);
                             setToast('Failed to get your location');
                             setTimeout(() => setToast(null), 5000);
                           }

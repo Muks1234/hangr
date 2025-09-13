@@ -3,29 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import Multiavatar from '@multiavatar/multiavatar';
 import { BACKEND_URL } from './App';
 
-
 const ViewProfile = ({ userId, targetUserId, token }) => {
   const [profile, setProfile] = useState({ username: '', mood: '', avatar: '', bio: '' });
-  const [friendRequestStatus, setFriendRequestStatus] = useState('none'); // 'none', 'pending', 'accepted', 'rejected'
+  const [friendRequestStatus, setFriendRequestStatus] = useState('none'); 
+  const [isAlreadyFriend, setIsAlreadyFriend] = useState(false); // ✅ check real friends
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    console.log('useEffect triggered - userId:', userId, 'targetUserId:', targetUserId, 'token:', token); // Debug effect trigger
     const fetchProfile = async () => {
       try {
-        console.log('Fetching profile - TargetUserId:', targetUserId, 'Token:', token); // Detailed request log
         const res = await fetch(`${BACKEND_URL}/api/users/profile/${targetUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
-          method: 'GET',
         });
-        console.log('Fetch response status:', res.status); // Log status
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
-        console.log('Profile API response:', data); // Log full response
+
+        // ✅ See if userId is in their friends
+        if (data.friends && Array.isArray(data.friends)) {
+          setIsAlreadyFriend(data.friends.some(f => f === userId || f?._id === userId));
+        }
+
         setProfile({
           username: data.username || data.user?.username || 'Unknown User',
           mood: data.mood || data.user?.mood || 'Not set',
@@ -51,12 +50,9 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         if (res.ok) {
           const data = await res.json();
           setFriendRequestStatus(data.status || 'none');
-        } else {
-          throw new Error(`HTTP error! status: ${res.status}`);
         }
       } catch (err) {
         console.error('Error fetching friend request status:', err.message);
-        setError('Failed to load friend request status');
       }
     };
 
@@ -65,7 +61,6 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
         .then(() => setLoading(false))
         .catch(() => setLoading(false));
     } else {
-      console.log('Skipping fetch - token or targetUserId missing:', { token, targetUserId }); // Debug missing data
       setLoading(false);
     }
   }, [token, userId, targetUserId]);
@@ -105,22 +100,26 @@ const ViewProfile = ({ userId, targetUserId, token }) => {
       <p><strong>Username:</strong> {profile.username}</p>
       <p><strong>Mood:</strong> {profile.mood}</p>
       <p><strong>Bio:</strong> {profile.bio}</p>
+
       {userId !== targetUserId && (
         <>
-          {friendRequestStatus === 'none' && (
+          {/* ✅ Only show request options if NOT already friends */}
+          {!isAlreadyFriend && friendRequestStatus === 'none' && (
             <button onClick={sendFriendRequest} className="join-button">
               Add Friend
             </button>
           )}
-          {friendRequestStatus === 'pending' && <p>Friend request sent</p>}
-          {friendRequestStatus === 'rejected' && (
+          {!isAlreadyFriend && friendRequestStatus === 'pending' && <p>Friend request sent</p>}
+          {!isAlreadyFriend && friendRequestStatus === 'rejected' && (
             <button onClick={sendFriendRequest} className="join-button">
               Send Request
             </button>
           )}
-          {friendRequestStatus === 'accepted' && (
+
+          {/* ✅ If already friends, no request stuff */}
+          {isAlreadyFriend && (
             <button onClick={() => navigate(`/chat/${targetUserId}`)} className="join-button">
-              Start Chat
+              ✅ Already Friends – Start Chat
             </button>
           )}
         </>

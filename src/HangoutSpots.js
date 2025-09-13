@@ -12,7 +12,7 @@ function HangoutSpots({ socket, userId, username, onLogout }) {
   const [hangoutSpots, setHangoutSpots] = useState([]);
   const [messageInput, setMessageInput] = useState('');
 
-  const BACKEND_URL = 'http://localhost:5000'; // Hardcoded backend URL
+  const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000'; // Hardcoded backend URL
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
