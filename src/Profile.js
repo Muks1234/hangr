@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, Save, X } from 'lucide-react';
+import { Edit, Save, X, MapPin } from 'lucide-react';
 import Multiavatar from '@multiavatar/multiavatar';
 import { BACKEND_URL } from './App';
-//import './Profile.css';
 
 const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
-  const [profile, setProfile] = useState({ username, mood: 'chill', avatar: '', bio: '' });
+  const [profile, setProfile] = useState({
+    username,
+    mood: 'chill',
+    avatar: '',
+    bio: '',
+    latitude: 0,
+    longitude: 0,
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +37,8 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
           mood: data.mood || 'chill',
           avatar: data.avatar || '',
           bio: data.bio || '',
+          latitude: data.latitude ?? 0,
+          longitude: data.longitude ?? 0,
         });
       } catch (err) {
         console.error('Error fetching profile:', err.message);
@@ -40,6 +48,44 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
     };
     if (token) fetchProfile();
   }, [token, username]);
+
+  // Update location with browser geolocation
+  const updateLocation = async () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const res = await fetch(`${BACKEND_URL}/api/users/location`, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            }),
+          });
+
+          if (!res.ok) throw new Error(`Failed to update location: ${res.status}`);
+          const updatedProfile = await res.json();
+          setProfile((prev) => ({ ...prev, ...updatedProfile }));
+          alert('📍 Location updated!');
+        } catch (err) {
+          console.error('Update location error:', err.message);
+          alert('Failed to update location.');
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error.message);
+        alert('Failed to get your location.');
+      }
+    );
+  };
 
   // Handle save
   const handleSave = async () => {
@@ -78,6 +124,7 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
       <div className="profile-avatar">
         <img src={profile.avatar || generateAvatar()} alt="Avatar" />
       </div>
+
       {isEditing ? (
         <div className="profile-form">
           <input
@@ -125,9 +172,17 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
             {statusMoods.find((m) => m.id === profile.mood)?.icon || ''}
           </p>
           <p><strong>Bio:</strong> {profile.bio || 'No bio yet'}</p>
-          <button onClick={() => setIsEditing(true)} className="edit-profile-button">
-            <Edit size={16} /> Edit Profile
-          </button>
+          <p><strong>Latitude:</strong> {profile.latitude}</p>
+          <p><strong>Longitude:</strong> {profile.longitude}</p>
+
+          <div className="profile-actions">
+            <button onClick={() => setIsEditing(true)} className="edit-profile-button">
+              <Edit size={16} /> Edit Profile
+            </button>
+            <button onClick={updateLocation} className="save-button">
+              <MapPin size={16} /> Update Location
+            </button>
+          </div>
         </div>
       )}
     </div>

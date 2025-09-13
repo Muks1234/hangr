@@ -5,25 +5,23 @@ import io from 'socket.io-client';
 import {
   Users,
   MessageCircle,
-  Coffee,
-  Music,
-  Gamepad2,
-  Book,
   Smile,
   LogOut,
   Edit,
   Trash2,
+  PlusCircle,
+  MapPin,
 } from 'lucide-react';
 import Auth from './Auth';
 import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
+export const BACKEND_URL = 'http://localhost:5000';
 
 // Wrapper component for the profile route to handle useParams
 const ProfileWrapper = ({ userId, token, fetchUsername }) => {
-  const { userId: targetUserId } = useParams(); // Safely call useParams here
+  const { userId: targetUserId } = useParams();
   return (
     <ViewProfile
       userId={userId}
@@ -57,12 +55,13 @@ function App() {
   const [isLoadingChats, setIsLoadingChats] = useState(false);
   const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
   const [hasFetchedChats, setHasFetchedChats] = useState(false);
+  const [descriptionLength, setDescriptionLength] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const usernameCache = useRef({}); // Cache for usernames to avoid repeated API calls
+  const usernameCache = useRef({});
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -81,7 +80,6 @@ function App() {
     scrollToBottom();
   }, [messages, dmMessages, scrollToBottom]);
 
-  // Sync activeTab with location
   useEffect(() => {
     if (location.pathname === '/') {
       setActiveTab('spots');
@@ -95,10 +93,11 @@ function App() {
       setActiveTab('profile');
     } else if (location.pathname === '/chats') {
       setActiveTab('chats');
+    } else if (location.pathname === '/create-spot') {
+      setActiveTab('spots');
     }
   }, [location.pathname]);
 
-  // Fetch username by userId
   const fetchUsername = useCallback(async (userId) => {
     if (usernameCache.current[userId]) {
       return usernameCache.current[userId];
@@ -113,24 +112,20 @@ function App() {
       return data.username || userId;
     } catch (err) {
       console.error('Error fetching username:', err.message);
-      return userId; // Fallback to userId if fetch fails
+      return userId;
     }
   }, [token]);
 
-  // Fetch friends
   const fetchFriends = useCallback(async () => {
     if (!token) return;
     setIsLoadingFriends(true);
     try {
-      console.log('Fetching friends with token:', token);
       const res = await fetch(`${BACKEND_URL}/api/friends`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed to fetch friends: ${res.status} ${res.statusText}`);
       const friendsData = await res.json();
-      console.log('Fetched friends:', friendsData);
       setFriends(friendsData);
-      // Update username cache
       friendsData.forEach((friend) => {
         usernameCache.current[friend.userId] = friend.username;
       });
@@ -144,17 +139,14 @@ function App() {
     }
   }, [token]);
 
-  // Fetch friend requests
   const fetchFriendRequests = useCallback(async () => {
     if (!token) return;
     try {
-      console.log('Fetching friend requests with token:', token);
       const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed to fetch friend requests: ${res.status} ${res.statusText}`);
       const requests = await res.json();
-      console.log('Pending friend requests:', requests);
       setFriendRequests(requests.map((req) => ({
         senderId: req.senderId,
         senderUsername: req.senderUsername,
@@ -169,18 +161,15 @@ function App() {
     }
   }, [token]);
 
-  // Fetch DMs for a conversation
   const fetchDmMessages = useCallback(
     async (otherUserId) => {
       if (!token || !otherUserId) return;
       try {
-        console.log('Fetching DMs for:', { userId, otherUserId });
         const res = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
         const data = await res.json();
-        console.log('DMs fetched:', data.messages);
         const messagesWithUsernames = await Promise.all(
           data.messages.map(async (msg) => {
             const username =
@@ -208,7 +197,6 @@ function App() {
     [token, userId, friends, fetchUsername]
   );
 
-  // Fetch data when switching tabs
   useEffect(() => {
     if (token) {
       if (activeTab === 'friends' && !hasFetchedFriends) {
@@ -231,7 +219,6 @@ function App() {
     }
   }, [activeTab, token, fetchFriends, fetchFriendRequests, fetchDmMessages, hasFetchedFriends, hasFetchedChats]);
 
-  // Initialize Socket.IO and listeners
   useEffect(() => {
     if (token && !socketRef.current) {
       socketRef.current = io(BACKEND_URL, {
@@ -248,16 +235,25 @@ function App() {
 
       socketRef.current.on('connect_error', (err) => {
         console.error('Socket.IO connection error:', err.message);
+        if (err.message.includes('Token expired')) {
+          setToast('Session expired, please log in again');
+          localStorage.removeItem('token');
+          localStorage.removeItem('userId');
+          localStorage.removeItem('username');
+          localStorage.removeItem('mood');
+          setToken(null);
+          setUserId(null);
+          setUsername(null);
+          setUserStatus('chill');
+          socketRef.current.disconnect();
+          socketRef.current = null;
+          navigate('/auth');
+          setTimeout(() => setToast(null), 5000);
+          // TODO: Implement token refresh by calling a /api/users/refresh-token endpoint if added to server.js
+        }
       });
 
       socketRef.current.on('friend-request', ({ senderId, senderUsername, requestId }) => {
-        console.log('Friend request received on frontend:', {
-          senderId,
-          senderUsername,
-          requestId,
-          currentUserId: userId,
-          existingRequests: friendRequests,
-        });
         setFriendRequests((prev) => {
           if (!prev.some((req) => req.requestId === requestId)) {
             usernameCache.current[senderId] = senderUsername;
@@ -271,7 +267,6 @@ function App() {
       });
 
       socketRef.current.on('friend-request-accepted', ({ senderId, senderUsername, receiverId, receiverUsername }) => {
-        console.log('Friend request accepted:', { senderId, senderUsername, receiverId, receiverUsername });
         setFriendRequests((prev) =>
           prev.filter((req) =>
             userId === senderId
@@ -303,7 +298,6 @@ function App() {
       });
 
       socketRef.current.on('friend-request-rejected', ({ requestId }) => {
-        console.log('Friend request rejected:', { requestId, currentUserId: userId });
         setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
         setToast('A friend request was rejected');
         setUnreadMessages((prev) => Math.max(0, prev - 1));
@@ -311,7 +305,6 @@ function App() {
       });
 
       socketRef.current.on('new-message', async ({ message, userId: senderId, username, timestamp, spotId, _id }) => {
-        console.log('Received new message:', { message, senderId, username, timestamp, spotId, currentSpot });
         const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
         if (spotId === currentSpot) {
           setMessages((prev) => {
@@ -332,8 +325,6 @@ function App() {
             }
             return prev;
           });
-        } else {
-          console.warn('Message ignored: spotId does not match currentSpot', { spotId, currentSpot });
         }
         if (activeTab !== 'chats') setUnreadMessages((prev) => prev + 1);
       });
@@ -355,7 +346,6 @@ function App() {
       });
 
       socketRef.current.on('typing', ({ userId, username, spotId }) => {
-        console.log('Typing event:', { userId, username, spotId });
         if (spotId === currentSpot) {
           setTypingUsers((prev) => {
             if (!prev.some((u) => u.userId === userId)) {
@@ -370,7 +360,6 @@ function App() {
       });
 
       socketRef.current.on('new-dm', async ({ _id, message, senderId, username, otherUserId, timestamp }) => {
-        console.log('Received new DM:', { _id, message, senderId, username, otherUserId, timestamp });
         const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
         const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
         setDmMessages((prev) => {
@@ -407,7 +396,6 @@ function App() {
       });
 
       socketRef.current.on('dm-updated', ({ messageId, updatedMessage, timestamp, otherUserId }) => {
-        console.log('DM updated:', { messageId, updatedMessage, timestamp, otherUserId });
         setDmMessages((prev) => {
           const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
           const chatMessages = prev[key] || [];
@@ -421,7 +409,6 @@ function App() {
       });
 
       socketRef.current.on('dm-deleted', ({ messageId, otherUserId }) => {
-        console.log('DM deleted:', { messageId, otherUserId });
         setDmMessages((prev) => {
           const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
           const chatMessages = prev[key] || [];
@@ -433,7 +420,6 @@ function App() {
       });
 
       socketRef.current.on('dm-typing', ({ userId: senderId, username, otherUserId }) => {
-        console.log('DM typing event:', { senderId, username, otherUserId });
         const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
         if (chatUserId === (senderId === userId ? otherUserId : senderId)) {
           setDmTypingUsers((prev) => ({
@@ -451,10 +437,11 @@ function App() {
       });
 
       socketRef.current.on('user-joined-spot', ({ userId, spotId, username }) => {
-        console.log('User joined spot:', { userId, spotId, username });
         setHangoutSpots((prev) =>
           prev.map((spot) =>
-            spot._id === spotId ? { ...spot, activeUsers: spot.activeUsers + 1 } : spot
+            spot._id === spotId
+              ? { ...spot, members: [...(spot.members || []), userId] }
+              : spot
           )
         );
         if (spotId === currentSpot) {
@@ -463,10 +450,11 @@ function App() {
       });
 
       socketRef.current.on('user-left-spot', ({ userId, spotId }) => {
-        console.log('User left spot:', { userId, spotId });
         setHangoutSpots((prev) =>
           prev.map((spot) =>
-            spot._id === spotId ? { ...spot, activeUsers: Math.max(0, spot.activeUsers - 1) } : spot
+            spot._id === spotId
+              ? { ...spot, members: (spot.members || []).filter((id) => id !== userId) }
+              : spot
           )
         );
         if (spotId === currentSpot) {
@@ -474,8 +462,32 @@ function App() {
         }
       });
 
+      socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, latitude, longitude, members, username }) => {
+        setHangoutSpots((prev) => {
+          if (!prev.some((spot) => spot._id === spotId)) {
+            return [
+              ...prev,
+              {
+                _id: spotId,
+                id: spotId,
+                name,
+                handle,
+                description,
+                latitude,
+                longitude,
+                members: members || [],
+                icon: MessageCircle,
+                className: 'default',
+              },
+            ];
+          }
+          return prev;
+        });
+        setToast(`New spot created: ${name} by ${username}`);
+        setTimeout(() => setToast(null), 5000);
+      });
+
       socketRef.current.on('error', ({ message }) => {
-        console.error('Socket error:', message);
         setToast(`Error: ${message}`);
         setTimeout(() => setToast(null), 5000);
       });
@@ -498,12 +510,12 @@ function App() {
         socketRef.current.off('dm-typing');
         socketRef.current.off('user-joined-spot');
         socketRef.current.off('user-left-spot');
+        socketRef.current.off('new-spot');
         socketRef.current.off('error');
       }
     };
-  }, [token, activeTab, currentSpot, userId, location]);
+  }, [token, activeTab, currentSpot, userId, location, fetchUsername]);
 
-  // Handle Google OAuth callback
   useEffect(() => {
     if (location.pathname === '/auth/callback') {
       const params = new URLSearchParams(location.search);
@@ -511,7 +523,6 @@ function App() {
       const userId = params.get('userId');
       const username = params.get('username');
       const mood = params.get('mood');
-      console.log('OAuth callback:', { token, userId, username, mood });
       if (token && userId && username) {
         localStorage.setItem('token', token);
         localStorage.setItem('userId', userId);
@@ -522,19 +533,15 @@ function App() {
         setUsername(username);
         setUserStatus(mood || 'chill');
         navigate('/');
-      } else {
-        console.error('Missing OAuth params:', { token, userId, username, mood });
       }
     }
   }, [location, navigate]);
 
-  // Fetch initial data on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('userId');
     const storedUsername = localStorage.getItem('username');
     const storedMood = localStorage.getItem('mood');
-    console.log('Stored credentials:', { storedToken, storedUserId, storedUsername, storedMood });
     if (storedToken && storedUserId && storedUsername) {
       setToken(storedToken);
       setUserId(storedUserId);
@@ -545,42 +552,31 @@ function App() {
       Promise.all([fetchFriends(), fetchFriendRequests()])
         .catch((err) => console.error('Error fetching initial data:', err))
         .finally(() => setIsLoadingFriends(false));
-    } else {
-      console.warn('Incomplete stored credentials');
     }
   }, [fetchFriends, fetchFriendRequests]);
 
-  // Fetch spots
   const fetchSpots = useCallback(async () => {
     try {
-      console.log('Fetching spots with token:', token || localStorage.getItem('token'));
       const res = await fetch(`${BACKEND_URL}/api/spots`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error(`Failed to fetch spots: ${res.status}`);
       const data = await res.json();
-      console.log('Spots fetched:', data);
       setHangoutSpots(
         data.map((spot) => ({
           ...spot,
           id: spot._id,
-          icon: {
-            'Chill Café': Coffee,
-            'Music Lounge': Music,
-            'Game Corner': Gamepad2,
-            'Study Spot': Book,
-          }[spot.name] || Coffee,
-          className: {
-            'Chill Café': 'cafe',
-            'Music Lounge': 'music',
-            'Game Corner': 'gaming',
-            'Study Spot': 'study',
-          }[spot.name] || 'default',
-          activeUsers: spot.activeUsers?.length || 0,
+          icon: MessageCircle,
+          className: 'default',
+          members: spot.members || [],
+          latitude: spot.latitude,
+          longitude: spot.longitude,
         }))
       );
     } catch (err) {
       console.error('Error fetching spots:', err.message);
+      setToast('Failed to load spots');
+      setTimeout(() => setToast(null), 5000);
     }
   }, [token]);
 
@@ -588,13 +584,70 @@ function App() {
     if (token) fetchSpots();
   }, [fetchSpots, token]);
 
-  // Join spot
+  const createSpot = async (spotData) => {
+    if (!token || !userId) {
+      setToast('Please log in to create a spot');
+      setTimeout(() => setToast(null), 5000);
+      return;
+    }
+    const tempSpotId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const optimisticSpot = {
+      ...spotData,
+      _id: tempSpotId,
+      id: tempSpotId,
+      members: [],
+      icon: MessageCircle,
+      className: 'default',
+      isOptimistic: true,
+      latitude: spotData.latitude,
+      longitude: spotData.longitude,
+    };
+    setHangoutSpots((prev) => [...prev, optimisticSpot]);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/spots`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(spotData),
+      });
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(`Failed to create spot: ${res.status} ${errorData.error || res.statusText}`);
+      }
+      const newSpot = await res.json();
+      setHangoutSpots((prev) =>
+        prev.map((spot) =>
+          spot._id === tempSpotId
+            ? {
+                ...newSpot,
+                id: newSpot._id,
+                icon: MessageCircle,
+                className: 'default',
+                members: newSpot.members || [],
+                latitude: newSpot.latitude,
+                longitude: newSpot.longitude,
+              }
+            : spot
+        )
+      );
+      setToast('Spot created successfully!');
+      setTimeout(() => setToast(null), 5000);
+      navigate('/');
+    } catch (err) {
+      console.error('Error creating spot:', err.message);
+      setHangoutSpots((prev) => prev.filter((spot) => spot._id !== tempSpotId));
+      setToast(`Failed to create spot: ${err.message}`);
+      setTimeout(() => setToast(null), 5000);
+    }
+  };
+
   const joinSpot = async (spotId) => {
     if (!username || !userId || !socketRef.current) {
       console.error('Cannot join spot: missing username, userId, or socket', { username, userId });
       return;
     }
-    console.log('Joining spot:', { spotId, username, userId });
     if (currentSpot) {
       socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
     }
@@ -604,13 +657,11 @@ function App() {
     setActiveUsers([]);
     setEditingMessageId(null);
     try {
-      console.log('Fetching messages for spot:', spotId);
       const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
       const data = await res.json();
-      console.log('Messages fetched:', data);
       const messagesWithUsernames = await Promise.all(
         data.map(async (msg) => {
           const resolvedUsername =
@@ -630,9 +681,7 @@ function App() {
     navigate('/');
   };
 
-  // Handle login
   const handleLogin = ({ userId, username, token, mood }) => {
-    console.log('Login successful:', { userId, username, token, mood });
     localStorage.setItem('token', token);
     localStorage.setItem('userId', userId);
     localStorage.setItem('username', username);
@@ -645,9 +694,7 @@ function App() {
     navigate('/');
   };
 
-  // Handle logout
   const handleLogout = () => {
-    console.log('Logging out');
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
@@ -673,7 +720,6 @@ function App() {
     navigate('/');
   };
 
-  // Send group message
   const sendMessage = (message) => {
     if (!message || !currentSpot || !username || !userId || !socketRef.current) {
       console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
@@ -685,11 +731,9 @@ function App() {
       ...prev,
       { message, userId, username, timestamp: tempTimestamp, _id: tempMessageId, isOptimistic: true },
     ]);
-    console.log('Sending message:', { message, spotId: currentSpot, userId, username });
     socketRef.current.emit('send-message', { message, spotId: currentSpot, userId, username });
   };
 
-  // Send direct message
   const sendDm = (message, otherUserId) => {
     if (!message || !otherUserId || !username || !userId || !socketRef.current) {
       console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
@@ -707,17 +751,14 @@ function App() {
         ],
       };
     });
-    console.log('Sending DM:', { message, otherUserId, userId, username });
     socketRef.current.emit('send-dm', { message, otherUserId, userId, username });
   };
 
-  // Start editing message
   const startEditing = (messageId, currentText) => {
     setEditingMessageId(messageId);
     setEditedMessageText(currentText);
   };
 
-  // Save edited message
   const saveEdit = (messageId, otherUserId = null) => {
     if (!editedMessageText || !socketRef.current) return;
     if (otherUserId) {
@@ -743,13 +784,11 @@ function App() {
     setEditedMessageText('');
   };
 
-  // Cancel editing
   const cancelEdit = () => {
     setEditingMessageId(null);
     setEditedMessageText('');
   };
 
-  // Delete message
   const deleteMessage = (messageId, otherUserId = null) => {
     if (!socketRef.current) return;
     if (otherUserId) {
@@ -767,23 +806,18 @@ function App() {
     }
   };
 
-  // Handle typing
   const handleTyping = (e, otherUserId = null) => {
     if (e.target.value && username && userId && socketRef.current) {
       if (otherUserId) {
-        console.log('Emitting DM typing event:', { username, otherUserId });
         socketRef.current.emit('dm-typing', { userId, username, otherUserId });
       } else if (currentSpot) {
-        console.log('Emitting typing event:', { username, spotId: currentSpot });
         socketRef.current.emit('typing', { userId, username, spotId: currentSpot });
       }
     }
   };
 
-  // Handle friend request response
   const handleFriendRequestResponse = async (requestId, accept) => {
     try {
-      console.log('Responding to friend request:', { requestId, accept, token });
       const res = await fetch(`${BACKEND_URL}/api/friends/response`, {
         method: 'POST',
         headers: {
@@ -794,10 +828,9 @@ function App() {
       });
       if (!res.ok) throw new Error(`Failed to respond to friend request: ${res.status} ${res.statusText}`);
       const data = await res.json();
-      console.log('Friend request response:', data);
       setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
       if (accept) {
-        fetchFriends(); // Refetch friends to update the list
+        fetchFriends();
         const request = friendRequests.find((req) => req.requestId === requestId);
         if (request) {
           setToast(`Added ${request.senderUsername} as a friend`);
@@ -814,7 +847,6 @@ function App() {
     }
   };
 
-  // Spot Card component
   const SpotCard = ({ spot }) => (
     <div
       className={`spot-card ${spot.className} fade-in`}
@@ -823,26 +855,30 @@ function App() {
       <div className="spot-card-header">
         <div className="spot-card-info">
           <div className="spot-icon">
-            <spot.icon size={20} color="#374151" />
+            <MessageCircle size={20} color="#374151" />
           </div>
           <div className="spot-details">
-            <h3>{spot.name}</h3>
+            <h3>{spot.name} (@{spot.handle})</h3>
             <p>{spot.description}</p>
+            <p>
+              <strong>Location:</strong>{' '}
+              {spot.latitude != null && spot.longitude != null
+                ? `${parseFloat(spot.latitude).toFixed(4)}, ${parseFloat(spot.longitude).toFixed(4)}`
+                : 'Unknown'}
+            </p>
           </div>
         </div>
         <div className="user-count">
           <Users size={14} color="#6b7280" />
-          <span>{spot.activeUsers}</span>
+          <span>{spot.members?.length || 0}</span>
         </div>
       </div>
       <div className="spot-card-footer">
-        <span className="mood-tag">{spot.mood} vibes</span>
         <button className="join-button">Join</button>
       </div>
     </div>
   );
 
-  // Render Auth if not logged in
   if (!token || !userId || !username) {
     return (
       <GoogleOAuthProvider clientId={'934486146442-9hj1qubb9bc6nlkuhog6thd8nb3pif2u.apps.googleusercontent.com'}>
@@ -884,6 +920,13 @@ function App() {
             <div className="user-avatar">
               <span>{username ? username[0].toUpperCase() : 'U'}</span>
             </div>
+            <button
+              onClick={() => navigate('/create-spot')}
+              className="create-spot-button"
+              title="Create a new spot"
+            >
+              <PlusCircle size={20} color="#6b7280" />
+            </button>
             <button onClick={handleLogout} className="logout-button">
               <LogOut size={20} color="#6b7280" />
             </button>
@@ -1084,6 +1127,132 @@ function App() {
                   </form>
                 </div>
               ) : null
+            }
+          />
+          <Route
+            path="/create-spot"
+            element={
+              <main className="main-content">
+                <div className="section-header">
+                  <h2>Create a New Spot</h2>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="back-button"
+                  >
+                    Back to Spots
+                  </button>
+                </div>
+                <div className="create-spot-form">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const latitude = parseFloat(e.target.latitude.value) || 0;
+                      const longitude = parseFloat(e.target.longitude.value) || 0;
+
+                      const spotData = {
+                        name: e.target.name.value.trim(),
+                        handle: e.target.handle.value.trim(),
+                        description: e.target.description.value.trim(),
+                        latitude,
+                        longitude,
+                      };
+
+                      if (spotData.name && spotData.handle && spotData.description) {
+                        createSpot(spotData);
+                        e.target.reset();
+                        setDescriptionLength(0);
+                      } else {
+                        setToast("Please fill out all required fields");
+                        setTimeout(() => setToast(null), 5000);
+                      }
+                    }}
+                  >
+                    <input
+                      type="text"
+                      name="name"
+                      placeholder="Spot Name"
+                      className="spot-input"
+                      maxLength={50}
+                      required
+                    />
+                    <input
+                      type="text"
+                      name="handle"
+                      placeholder="Spot Handle (e.g., coolspot)"
+                      className="spot-input"
+                      maxLength={30}
+                      pattern="[a-zA-Z0-9_]+"
+                      title="Handle must contain only letters, numbers, or underscores"
+                      required
+                    />
+                    <div className="description-wrapper">
+                      <input
+                        type="text"
+                        name="description"
+                        placeholder="Description"
+                        className="spot-input"
+                        maxLength={200}
+                        onChange={(e) => setDescriptionLength(e.target.value.length)}
+                        required
+                      />
+                      <span className="character-counter">
+                        {descriptionLength}/200
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      name="latitude"
+                      placeholder="Latitude"
+                      className="spot-input"
+                      step="any"
+                      defaultValue={0}
+                      required
+                    />
+                    <input
+                      type="number"
+                      name="longitude"
+                      placeholder="Longitude"
+                      className="spot-input"
+                      step="any"
+                      defaultValue={0}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!navigator.geolocation) {
+                          setToast("Geolocation is not supported by your browser");
+                          setTimeout(() => setToast(null), 5000);
+                          return;
+                        }
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            document.querySelector('input[name="latitude"]').value =
+                              position.coords.latitude;
+                            document.querySelector('input[name="longitude"]').value =
+                              position.coords.longitude;
+                            setToast(
+                              `📍 Location set: ${position.coords.latitude}, ${position.coords.longitude}`
+                            );
+                            setTimeout(() => setToast(null), 5000);
+                          },
+                          (error) => {
+                            console.error("Geolocation error:", error.message);
+                            setToast("Failed to get your location");
+                            setTimeout(() => setToast(null), 5000);
+                          }
+                        );
+                      }}
+                      className="update-location-button"
+                    >
+                      <MapPin size={16} /> Use My Location
+                    </button>
+                    <button type="submit" className="create-button">
+                      Create Spot
+                    </button>
+                  </form>
+                </div>
+              </main>
             }
           />
           <Route
@@ -1379,7 +1548,7 @@ function App() {
       <nav className="bottom-nav">
         <div className="nav-items">
           {[
-            { id: 'spots', label: 'Spots', icon: Coffee, path: '/' },
+            { id: 'spots', label: 'Spots', icon: MessageCircle, path: '/' },
             {
               id: 'chats',
               label: 'Chats',
