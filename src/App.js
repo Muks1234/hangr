@@ -987,7 +987,7 @@ function App() {
                   </div>
                   <div className="active-users">
                     <p style={{ color: 'white' }}>
-                      Active Users: {activeUsers.map((u) => u.username).join(', ') || 'None'}
+                      Active Users: {activeUsers.map((u) => u.username).join(', ') || ''}
                     </p>
                   </div>
                   <div className="typing-indicator">
