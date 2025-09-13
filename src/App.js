@@ -19,7 +19,7 @@ import './App.css';
 
 export const BACKEND_URL = 'http://localhost:5000';
 
-// Wrapper component for the profile route to handle useParams
+// ProfileWrapper for handling dynamic userId in profile route
 const ProfileWrapper = ({ userId, token, fetchUsername }) => {
   const { userId: targetUserId } = useParams();
   return (
@@ -56,12 +56,13 @@ function App() {
   const [hasFetchedFriends, setHasFetchedFriends] = useState(false);
   const [hasFetchedChats, setHasFetchedChats] = useState(false);
   const [descriptionLength, setDescriptionLength] = useState(0);
-  const location = useLocation();
-  const navigate = useNavigate();
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
   const usernameCache = useRef({});
+  const pendingSpots = useRef(new Map()); // Track pending optimistic spots
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const statusMoods = [
     { id: 'chill', label: 'Chill', icon: '😌' },
@@ -70,27 +71,25 @@ function App() {
     { id: 'social', label: 'Social', icon: '🤝' },
   ];
 
+  // Scroll to bottom of messages
   const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, dmMessages, scrollToBottom]);
 
+  // Update active tab based on route
   useEffect(() => {
     if (location.pathname === '/') {
       setActiveTab('spots');
     } else if (location.pathname.startsWith('/chat/')) {
       setActiveTab('chats');
-    } else if (location.pathname.startsWith('/profile/')) {
+    } else if (location.pathname.startsWith('/profile/') || location.pathname === '/profile') {
       setActiveTab('profile');
     } else if (location.pathname === '/friends') {
       setActiveTab('friends');
-    } else if (location.pathname === '/profile') {
-      setActiveTab('profile');
     } else if (location.pathname === '/chats') {
       setActiveTab('chats');
     } else if (location.pathname === '/create-spot') {
@@ -98,33 +97,38 @@ function App() {
     }
   }, [location.pathname]);
 
-  const fetchUsername = useCallback(async (userId) => {
-    if (usernameCache.current[userId]) {
-      return usernameCache.current[userId];
-    }
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`Failed to fetch username: ${res.status}`);
-      const data = await res.json();
-      usernameCache.current[userId] = data.username || userId;
-      return data.username || userId;
-    } catch (err) {
-      console.error('Error fetching username:', err.message);
-      return userId;
-    }
-  }, [token]);
+  // Fetch username with caching
+  const fetchUsername = useCallback(
+    async (id) => {
+      if (usernameCache.current[id]) {
+        return usernameCache.current[id];
+      }
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/users/profile/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) throw new Error(`Failed to fetch username: ${response.status}`);
+        const data = await response.json();
+        usernameCache.current[id] = data.username || id;
+        return data.username || id;
+      } catch (err) {
+        console.error('Error fetching username:', err.message);
+        return id;
+      }
+    },
+    [token]
+  );
 
+  // Fetch friends
   const fetchFriends = useCallback(async () => {
     if (!token) return;
     setIsLoadingFriends(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends`, {
+      const response = await fetch(`${BACKEND_URL}/api/friends`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`Failed to fetch friends: ${res.status} ${res.statusText}`);
-      const friendsData = await res.json();
+      if (!response.ok) throw new Error(`Failed to fetch friends: ${response.status}`);
+      const friendsData = await response.json();
       setFriends(friendsData);
       friendsData.forEach((friend) => {
         usernameCache.current[friend.userId] = friend.username;
@@ -132,27 +136,30 @@ function App() {
       setHasFetchedFriends(true);
     } catch (err) {
       console.error('Error fetching friends:', err.message);
-      setToast('Failed to load friends list');
+      setToast('Failed to load friends');
       setTimeout(() => setToast(null), 5000);
     } finally {
       setIsLoadingFriends(false);
     }
   }, [token]);
 
+  // Fetch friend requests
   const fetchFriendRequests = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends/requests`, {
+      const response = await fetch(`${BACKEND_URL}/api/friends/requests`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`Failed to fetch friend requests: ${res.status} ${res.statusText}`);
-      const requests = await res.json();
-      setFriendRequests(requests.map((req) => ({
-        senderId: req.senderId,
-        senderUsername: req.senderUsername,
-        requestId: req._id,
-        status: req.status,
-      })));
+      if (!response.ok) throw new Error(`Failed to fetch friend requests: ${response.status}`);
+      const requests = await response.json();
+      setFriendRequests(
+        requests.map((req) => ({
+          senderId: req.senderId,
+          senderUsername: req.senderUsername,
+          requestId: req._id,
+          status: req.status,
+        }))
+      );
       setUnreadMessages((prev) => prev + requests.length);
     } catch (err) {
       console.error('Error fetching friend requests:', err.message);
@@ -161,28 +168,24 @@ function App() {
     }
   }, [token]);
 
+  // Fetch DM messages
   const fetchDmMessages = useCallback(
     async (otherUserId) => {
       if (!token || !otherUserId) return;
       try {
-        const res = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
+        const response = await fetch(`${BACKEND_URL}/api/conversations/${otherUserId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error(`Failed to fetch DMs: ${res.status}`);
-        const data = await res.json();
+        if (!response.ok) throw new Error(`Failed to fetch DMs: ${response.status}`);
+        const data = await response.json();
         const messagesWithUsernames = await Promise.all(
-          data.messages.map(async (msg) => {
-            const username =
-              friends.find((f) => f.userId === msg.senderId)?.username ||
-              (await fetchUsername(msg.senderId));
-            return {
-              _id: msg._id,
-              message: msg.message,
-              senderId: msg.senderId,
-              username,
-              timestamp: msg.timestamp,
-            };
-          })
+          data.messages.map(async (msg) => ({
+            _id: msg._id,
+            message: msg.message,
+            senderId: msg.senderId,
+            username: friends.find((f) => f.userId === msg.senderId)?.username || (await fetchUsername(msg.senderId)),
+            timestamp: msg.timestamp,
+          }))
         );
         setDmMessages((prev) => ({
           ...prev,
@@ -194,304 +197,312 @@ function App() {
         setTimeout(() => setToast(null), 5000);
       }
     },
-    [token, userId, friends, fetchUsername]
+    [token, friends, fetchUsername]
   );
 
+  // Fetch friends and chats when needed
   useEffect(() => {
-    if (token) {
-      if (activeTab === 'friends' && !hasFetchedFriends) {
-        setIsLoadingFriends(true);
-        Promise.all([fetchFriends(), fetchFriendRequests()])
-          .catch((err) => console.error('Error fetching friends data:', err))
-          .finally(() => setIsLoadingFriends(false));
-      } else if (activeTab === 'chats' && !hasFetchedChats) {
-        setIsLoadingChats(true);
-        fetchFriends()
-          .then(() => {
-            return Promise.all(
-              friends.map((friend) => fetchDmMessages(friend.userId))
-            );
-          })
-          .then(() => setHasFetchedChats(true))
-          .catch((err) => console.error('Error fetching chats data:', err))
-          .finally(() => setIsLoadingChats(false));
-      }
+    if (!token) return;
+    if (activeTab === 'friends' && !hasFetchedFriends) {
+      setIsLoadingFriends(true);
+      Promise.all([fetchFriends(), fetchFriendRequests()])
+        .catch((err) => console.error('Error fetching friends data:', err))
+        .finally(() => setIsLoadingFriends(false));
+    } else if (activeTab === 'chats' && !hasFetchedChats) {
+      setIsLoadingChats(true);
+      fetchFriends()
+        .then(() => Promise.all(friends.map((friend) => fetchDmMessages(friend.userId))))
+        .then(() => setHasFetchedChats(true))
+        .catch((err) => console.error('Error fetching chats data:', err))
+        .finally(() => setIsLoadingChats(false));
     }
-  }, [activeTab, token, fetchFriends, fetchFriendRequests, fetchDmMessages, hasFetchedFriends, hasFetchedChats]);
+  }, [activeTab, token, fetchFriends, fetchFriendRequests, fetchDmMessages, hasFetchedFriends, hasFetchedChats, friends]);
 
+  // Socket.IO setup
   useEffect(() => {
-    if (token && !socketRef.current) {
-      socketRef.current = io(BACKEND_URL, {
-        withCredentials: true,
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        auth: { token },
-      });
+    if (!token || socketRef.current) return;
 
-      socketRef.current.on('connect', () => {
-        console.log('Socket.IO connected:', socketRef.current.id, 'for userId:', userId);
-      });
+    socketRef.current = io(BACKEND_URL, {
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      auth: { token },
+    });
 
-      socketRef.current.on('connect_error', (err) => {
-        console.error('Socket.IO connection error:', err.message);
-        if (err.message.includes('Token expired')) {
-          setToast('Session expired, please log in again');
-          localStorage.removeItem('token');
-          localStorage.removeItem('userId');
-          localStorage.removeItem('username');
-          localStorage.removeItem('mood');
-          setToken(null);
-          setUserId(null);
-          setUsername(null);
-          setUserStatus('chill');
-          socketRef.current.disconnect();
-          socketRef.current = null;
-          navigate('/auth');
-          setTimeout(() => setToast(null), 5000);
-          // TODO: Implement token refresh by calling a /api/users/refresh-token endpoint if added to server.js
+    socketRef.current.on('connect', () => {
+      console.log('Socket.IO connected:', socketRef.current.id, 'for userId:', userId);
+    });
+
+    socketRef.current.on('connect_error', (err) => {
+      console.error('Socket.IO connection error:', err.message);
+      if (err.message.includes('Token expired')) {
+        setToast('Session expired, please log in again');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('username');
+        localStorage.removeItem('mood');
+        setToken(null);
+        setUserId(null);
+        setUsername(null);
+        setUserStatus('chill');
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        navigate('/auth');
+        setTimeout(() => setToast(null), 5000);
+      }
+    });
+
+    socketRef.current.on('friend-request', ({ senderId, senderUsername, requestId }) => {
+      setFriendRequests((prev) => {
+        if (!prev.some((req) => req.requestId === requestId)) {
+          usernameCache.current[senderId] = senderUsername;
+          return [...prev, { senderId, senderUsername, requestId, status: 'pending' }];
         }
+        return prev;
       });
+      setUnreadMessages((prev) => prev + 1);
+      setToast(`New friend request from ${senderUsername}`);
+      setTimeout(() => setToast(null), 5000);
+    });
 
-      socketRef.current.on('friend-request', ({ senderId, senderUsername, requestId }) => {
-        setFriendRequests((prev) => {
-          if (!prev.some((req) => req.requestId === requestId)) {
-            usernameCache.current[senderId] = senderUsername;
-            return [...prev, { senderId, senderUsername, requestId, status: 'pending' }];
+    socketRef.current.on('friend-request-accepted', ({ senderId, senderUsername, receiverId, receiverUsername }) => {
+      setFriendRequests((prev) =>
+        prev.filter((req) => (userId === senderId ? req.senderId !== receiverId : req.senderId !== senderId))
+      );
+      if (senderId === userId) {
+        setFriends((prev) => {
+          if (!prev.some((friend) => friend.userId === receiverId)) {
+            usernameCache.current[receiverId] = receiverUsername;
+            return [...prev, { userId: receiverId, username: receiverUsername }];
           }
           return prev;
         });
-        setUnreadMessages((prev) => prev + 1);
-        setToast(`New friend request from ${senderUsername}`);
-        setTimeout(() => setToast(null), 5000);
-      });
+        setToast(`Friend request to ${receiverUsername} accepted`);
+      } else if (receiverId === userId) {
+        setFriends((prev) => {
+          if (!prev.some((friend) => friend.userId === senderId)) {
+            usernameCache.current[senderId] = senderUsername;
+            return [...prev, { userId: senderId, username: senderUsername }];
+          }
+          return prev;
+        });
+        setToast(`Friend request from ${senderUsername} accepted`);
+      }
+      setUnreadMessages((prev) => Math.max(0, prev - 1));
+      setTimeout(() => setToast(null), 5000);
+    });
 
-      socketRef.current.on('friend-request-accepted', ({ senderId, senderUsername, receiverId, receiverUsername }) => {
-        setFriendRequests((prev) =>
-          prev.filter((req) =>
-            userId === senderId
-              ? req.senderId !== receiverId
-              : req.senderId !== senderId
-          )
-        );
-        if (senderId === userId) {
-          setFriends((prev) => {
-            if (!prev.some((friend) => friend.userId === receiverId)) {
-              usernameCache.current[receiverId] = receiverUsername;
-              return [...prev, { userId: receiverId, username: receiverUsername }];
-            }
-            return prev;
-          });
-          setToast(`Friend request to ${receiverUsername} accepted`);
-        } else if (receiverId === userId) {
-          setFriends((prev) => {
-            if (!prev.some((friend) => friend.userId === senderId)) {
-              usernameCache.current[senderId] = senderUsername;
-              return [...prev, { userId: senderId, username: senderUsername }];
-            }
-            return prev;
-          });
-          setToast(`Friend request from ${senderUsername} accepted`);
-        }
-        setUnreadMessages((prev) => Math.max(0, prev - 1));
-        setTimeout(() => setToast(null), 5000);
-      });
+    socketRef.current.on('friend-request-rejected', ({ requestId }) => {
+      setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
+      setToast('A friend request was rejected');
+      setUnreadMessages((prev) => Math.max(0, prev - 1));
+      setTimeout(() => setToast(null), 5000);
+    });
 
-      socketRef.current.on('friend-request-rejected', ({ requestId }) => {
-        setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
-        setToast('A friend request was rejected');
-        setUnreadMessages((prev) => Math.max(0, prev - 1));
-        setTimeout(() => setToast(null), 5000);
-      });
-
-      socketRef.current.on('new-message', async ({ message, userId: senderId, username, timestamp, spotId, _id }) => {
-        const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
-        if (spotId === currentSpot) {
-          setMessages((prev) => {
-            const optimisticMsg = prev.find(
-              (msg) => msg.message === message && msg.userId === senderId && msg.isOptimistic
-            );
-            if (optimisticMsg) {
-              return prev.map((msg) =>
-                msg === optimisticMsg ? { message, userId: senderId, username: resolvedUsername, timestamp, _id } : msg
-              );
-            }
-            if (
-              !prev.some(
-                (msg) => msg.message === message && msg.userId === senderId && msg.timestamp === timestamp
-              )
-            ) {
-              return [...prev, { message, userId: senderId, username: resolvedUsername, timestamp, _id }];
-            }
-            return prev;
-          });
-        }
-        if (activeTab !== 'chats') setUnreadMessages((prev) => prev + 1);
-      });
-
-      socketRef.current.on('message-updated', ({ messageId, updatedMessage, timestamp, spotId }) => {
-        if (spotId === currentSpot) {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg
-            )
-          );
-        }
-      });
-
-      socketRef.current.on('message-deleted', ({ messageId, spotId }) => {
-        if (spotId === currentSpot) {
-          setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-        }
-      });
-
-      socketRef.current.on('typing', ({ userId, username, spotId }) => {
-        if (spotId === currentSpot) {
-          setTypingUsers((prev) => {
-            if (!prev.some((u) => u.userId === userId)) {
-              return [...prev, { userId, username }];
-            }
-            return prev;
-          });
-          setTimeout(() => {
-            setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
-          }, 3000);
-        }
-      });
-
-      socketRef.current.on('new-dm', async ({ _id, message, senderId, username, otherUserId, timestamp }) => {
-        const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
-        const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
-        setDmMessages((prev) => {
-          const key = senderId === userId ? otherUserId : senderId;
-          const chatMessages = prev[key] || [];
-          const optimisticMsg = chatMessages.find(
-            (msg) => msg.message === message && msg.senderId === senderId && msg.isOptimistic
+    socketRef.current.on('new-message', async ({ message, userId: senderId, username, timestamp, spotId, _id }) => {
+      const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
+      if (spotId === currentSpot) {
+        setMessages((prev) => {
+          const optimisticMsg = prev.find(
+            (msg) => msg.message === message && msg.userId === senderId && msg.isOptimistic
           );
           if (optimisticMsg) {
-            return {
-              ...prev,
-              [key]: chatMessages.map((msg) =>
-                msg === optimisticMsg ? { _id, message, senderId, username: resolvedUsername, timestamp } : msg
-              ),
-            };
+            return prev.map((msg) =>
+              msg === optimisticMsg ? { message, userId: senderId, username: resolvedUsername, timestamp, _id } : msg
+            );
           }
-          if (
-            !chatMessages.some(
-              (msg) => msg.message === message && msg.senderId === senderId && msg.timestamp === timestamp
-            )
-          ) {
-            return {
-              ...prev,
-              [key]: [...chatMessages, { _id, message, senderId, username: resolvedUsername, timestamp }],
-            };
+          if (!prev.some((msg) => msg.message === message && msg.userId === senderId && msg.timestamp === timestamp)) {
+            return [...prev, { message, userId: senderId, username: resolvedUsername, timestamp, _id }];
           }
           return prev;
         });
-        if (chatUserId !== (senderId === userId ? otherUserId : senderId) && activeTab !== 'chats') {
-          setUnreadMessages((prev) => prev + 1);
-          setToast(`New message from ${resolvedUsername}`);
-          setTimeout(() => setToast(null), 5000);
-        }
-      });
+      }
+      if (activeTab !== 'chats') setUnreadMessages((prev) => prev + 1);
+    });
 
-      socketRef.current.on('dm-updated', ({ messageId, updatedMessage, timestamp, otherUserId }) => {
-        setDmMessages((prev) => {
-          const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
-          const chatMessages = prev[key] || [];
+    socketRef.current.on('message-updated', ({ messageId, updatedMessage, timestamp, spotId }) => {
+      if (spotId === currentSpot) {
+        setMessages((prev) =>
+          prev.map((msg) => (msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg))
+        );
+      }
+    });
+
+    socketRef.current.on('message-deleted', ({ messageId, spotId }) => {
+      if (spotId === currentSpot) {
+        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      }
+    });
+
+    socketRef.current.on('typing', ({ userId, username, spotId }) => {
+      if (spotId === currentSpot) {
+        setTypingUsers((prev) => {
+          if (!prev.some((u) => u.userId === userId)) {
+            return [...prev, { userId, username }];
+          }
+          return prev;
+        });
+        setTimeout(() => {
+          setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+        }, 3000);
+      }
+    });
+
+    socketRef.current.on('new-dm', async ({ _id, message, senderId, username, otherUserId, timestamp }) => {
+      const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
+      const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
+      setDmMessages((prev) => {
+        const key = senderId === userId ? otherUserId : senderId;
+        const chatMessages = prev[key] || [];
+        const optimisticMsg = chatMessages.find(
+          (msg) => msg.message === message && msg.senderId === senderId && msg.isOptimistic
+        );
+        if (optimisticMsg) {
           return {
             ...prev,
             [key]: chatMessages.map((msg) =>
-              msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg
+              msg === optimisticMsg ? { _id, message, senderId, username: resolvedUsername, timestamp } : msg
             ),
           };
-        });
-      });
-
-      socketRef.current.on('dm-deleted', ({ messageId, otherUserId }) => {
-        setDmMessages((prev) => {
-          const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
-          const chatMessages = prev[key] || [];
+        }
+        if (!chatMessages.some((msg) => msg.message === message && msg.senderId === senderId && msg.timestamp === timestamp)) {
           return {
             ...prev,
-            [key]: chatMessages.filter((msg) => msg._id !== messageId),
+            [key]: [...chatMessages, { _id, message, senderId, username: resolvedUsername, timestamp }],
           };
-        });
-      });
-
-      socketRef.current.on('dm-typing', ({ userId: senderId, username, otherUserId }) => {
-        const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
-        if (chatUserId === (senderId === userId ? otherUserId : senderId)) {
-          setDmTypingUsers((prev) => ({
-            ...prev,
-            [senderId]: { userId: senderId, username },
-          }));
-          setTimeout(() => {
-            setDmTypingUsers((prev) => {
-              const newTypingUsers = { ...prev };
-              delete newTypingUsers[senderId];
-              return newTypingUsers;
-            });
-          }, 3000);
         }
+        return prev;
       });
+      if (chatUserId !== (senderId === userId ? otherUserId : senderId) && activeTab !== 'chats') {
+        setUnreadMessages((prev) => prev + 1);
+        setToast(`New message from ${resolvedUsername}`);
+        setTimeout(() => setToast(null), 5000);
+      }
+    });
 
-      socketRef.current.on('user-joined-spot', ({ userId, spotId, username }) => {
-        setHangoutSpots((prev) =>
-          prev.map((spot) =>
-            spot._id === spotId
-              ? { ...spot, members: [...(spot.members || []), userId] }
-              : spot
-          )
-        );
-        if (spotId === currentSpot) {
-          setActiveUsers((prev) => [...prev, { userId, username }]);
-        }
+    socketRef.current.on('dm-updated', ({ messageId, updatedMessage, timestamp, otherUserId }) => {
+      setDmMessages((prev) => {
+        const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
+        const chatMessages = prev[key] || [];
+        return {
+          ...prev,
+          [key]: chatMessages.map((msg) =>
+            msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg
+          ),
+        };
       });
+    });
 
-      socketRef.current.on('user-left-spot', ({ userId, spotId }) => {
-        setHangoutSpots((prev) =>
-          prev.map((spot) =>
-            spot._id === spotId
-              ? { ...spot, members: (spot.members || []).filter((id) => id !== userId) }
-              : spot
-          )
-        );
-        if (spotId === currentSpot) {
-          setActiveUsers((prev) => prev.filter((u) => u.userId !== userId));
-        }
+    socketRef.current.on('dm-deleted', ({ messageId, otherUserId }) => {
+      setDmMessages((prev) => {
+        const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
+        const chatMessages = prev[key] || [];
+        return {
+          ...prev,
+          [key]: chatMessages.filter((msg) => msg._id !== messageId),
+        };
       });
+    });
 
-      socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, latitude, longitude, members, username }) => {
-        setHangoutSpots((prev) => {
-          if (!prev.some((spot) => spot._id === spotId)) {
-            return [
-              ...prev,
-              {
-                _id: spotId,
-                id: spotId,
-                name,
-                handle,
-                description,
-                latitude,
-                longitude,
-                members: members || [],
-                icon: MessageCircle,
-                className: 'default',
-              },
-            ];
+    socketRef.current.on('dm-typing', ({ userId: senderId, username, otherUserId }) => {
+      const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
+      if (chatUserId === (senderId === userId ? otherUserId : senderId)) {
+        setDmTypingUsers((prev) => ({
+          ...prev,
+          [senderId]: { userId: senderId, username },
+        }));
+        setTimeout(() => {
+          setDmTypingUsers((prev) => {
+            const newTypingUsers = { ...prev };
+            delete newTypingUsers[senderId];
+            return newTypingUsers;
+          });
+        }, 3000);
+      }
+    });
+
+    socketRef.current.on('user-joined-spot', ({ userId, spotId, username }) => {
+      setHangoutSpots((prev) =>
+        prev.map((spot) =>
+          spot._id === spotId ? { ...spot, members: [...(spot.members || []), userId] } : spot
+        )
+      );
+      if (spotId === currentSpot) {
+        setActiveUsers((prev) => {
+          if (!prev.some((u) => u.userId === userId)) {
+            return [...prev, { userId, username }];
           }
           return prev;
         });
-        setToast(`New spot created: ${name} by ${username}`);
-        setTimeout(() => setToast(null), 5000);
-      });
+      }
+    });
 
-      socketRef.current.on('error', ({ message }) => {
-        setToast(`Error: ${message}`);
-        setTimeout(() => setToast(null), 5000);
+    socketRef.current.on('user-left-spot', ({ userId, spotId }) => {
+      setHangoutSpots((prev) =>
+        prev.map((spot) =>
+          spot._id === spotId ? { ...spot, members: (spot.members || []).filter((id) => id !== userId) } : spot
+        )
+      );
+      if (spotId === currentSpot) {
+        setActiveUsers((prev) => prev.filter((u) => u.userId !== userId));
+      }
+    });
+
+    socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, location, members, username }) => {
+      setHangoutSpots((prev) => {
+        const tempSpot = Array.from(pendingSpots.current.entries()).find(
+          ([, spot]) => spot.handle === handle && spot.isOptimistic
+        );
+        if (tempSpot) {
+          const [tempId] = tempSpot;
+          pendingSpots.current.delete(tempId);
+          return prev.map((spot) =>
+            spot._id === tempId
+              ? {
+                  _id: spotId,
+                  id: spotId,
+                  name,
+                  handle,
+                  description,
+                  latitude: location?.coordinates?.[1] ?? 0,
+                  longitude: location?.coordinates?.[0] ?? 0,
+                  distanceInKm: 0,
+                  members: members || [],
+                  icon: MessageCircle,
+                  className: 'default',
+                }
+              : spot
+          );
+        }
+        if (!prev.some((spot) => spot._id === spotId)) {
+          return [
+            ...prev,
+            {
+              _id: spotId,
+              id: spotId,
+              name,
+              handle,
+              description,
+              latitude: location?.coordinates?.[1] ?? 0,
+              longitude: location?.coordinates?.[0] ?? 0,
+              distanceInKm: 0, // Updated on next fetchSpots
+              members: members || [],
+              icon: MessageCircle,
+              className: 'default',
+            },
+          ];
+        }
+        return prev;
       });
-    }
+      setToast(`New spot created: ${name} by ${username}`);
+      setTimeout(() => setToast(null), 5000);
+    });
+
+    socketRef.current.on('error', ({ message }) => {
+      setToast(`Error: ${message}`);
+      setTimeout(() => setToast(null), 5000);
+    });
 
     return () => {
       if (socketRef.current) {
@@ -512,31 +523,36 @@ function App() {
         socketRef.current.off('user-left-spot');
         socketRef.current.off('new-spot');
         socketRef.current.off('error');
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
-  }, [token, activeTab, currentSpot, userId, location, fetchUsername]);
+  }, [token, activeTab, currentSpot, userId, location, navigate, fetchUsername]);
 
+  // Handle auth callback
   useEffect(() => {
     if (location.pathname === '/auth/callback') {
       const params = new URLSearchParams(location.search);
-      const token = params.get('token');
-      const userId = params.get('userId');
-      const username = params.get('username');
-      const mood = params.get('mood');
-      if (token && userId && username) {
-        localStorage.setItem('token', token);
-        localStorage.setItem('userId', userId);
-        localStorage.setItem('username', username);
-        localStorage.setItem('mood', mood || 'chill');
-        setToken(token);
-        setUserId(userId);
-        setUsername(username);
-        setUserStatus(mood || 'chill');
+      const authToken = params.get('token');
+      const authUserId = params.get('userId');
+      const authUsername = params.get('username');
+      const authMood = params.get('mood');
+      if (authToken && authUserId && authUsername) {
+        localStorage.setItem('token', authToken);
+        localStorage.setItem('userId', authUserId);
+        localStorage.setItem('username', authUsername);
+        localStorage.setItem('mood', authMood || 'chill');
+        setToken(authToken);
+        setUserId(authUserId);
+        setUsername(authUsername);
+        setUserStatus(authMood || 'chill');
+        usernameCache.current[authUserId] = authUsername;
         navigate('/');
       }
     }
   }, [location, navigate]);
 
+  // Load stored auth data
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUserId = localStorage.getItem('userId');
@@ -555,35 +571,51 @@ function App() {
     }
   }, [fetchFriends, fetchFriendRequests]);
 
+  // Fetch nearby spots
   const fetchSpots = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/api/spots`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const response = await fetch(`${BACKEND_URL}/api/spots/nearby`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`Failed to fetch spots: ${res.status}`);
-      const data = await res.json();
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 400 && errorData.error === 'User location not set') {
+          setToast('Please set your location in your profile to view nearby spots');
+          setTimeout(() => setToast(null), 5000);
+          navigate('/profile');
+          return;
+        }
+        throw new Error(`Failed to fetch nearby spots: ${response.status} ${errorData.error || response.statusText}`);
+      }
+      const data = await response.json();
       setHangoutSpots(
         data.map((spot) => ({
-          ...spot,
+          _id: spot._id,
           id: spot._id,
+          name: spot.name,
+          handle: spot.handle,
+          description: spot.description,
+          latitude: spot.location?.coordinates?.[1] ?? 0,
+          longitude: spot.location?.coordinates?.[0] ?? 0,
+          distanceInKm: spot.distanceInKm ?? 0,
+          members: spot.members || [],
           icon: MessageCircle,
           className: 'default',
-          members: spot.members || [],
-          latitude: spot.latitude,
-          longitude: spot.longitude,
         }))
       );
     } catch (err) {
-      console.error('Error fetching spots:', err.message);
-      setToast('Failed to load spots');
+      console.error('Error fetching nearby spots:', err.message);
+      setToast('Failed to load nearby spots');
       setTimeout(() => setToast(null), 5000);
     }
-  }, [token]);
+  }, [token, navigate]);
 
   useEffect(() => {
     if (token) fetchSpots();
   }, [fetchSpots, token]);
 
+  // Create a new spot
   const createSpot = async (spotData) => {
     if (!token || !userId) {
       setToast('Please log in to create a spot');
@@ -592,19 +624,24 @@ function App() {
     }
     const tempSpotId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const optimisticSpot = {
-      ...spotData,
       _id: tempSpotId,
       id: tempSpotId,
+      name: spotData.name,
+      handle: spotData.handle,
+      description: spotData.description,
+      latitude: spotData.latitude,
+      longitude: spotData.longitude,
+      distanceInKm: 0,
       members: [],
       icon: MessageCircle,
       className: 'default',
       isOptimistic: true,
-      latitude: spotData.latitude,
-      longitude: spotData.longitude,
+      tempId: tempSpotId, // Store tempId for matching
     };
+    pendingSpots.current.set(tempSpotId, optimisticSpot);
     setHangoutSpots((prev) => [...prev, optimisticSpot]);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/spots`, {
+      const response = await fetch(`${BACKEND_URL}/api/spots`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -612,22 +649,27 @@ function App() {
         },
         body: JSON.stringify(spotData),
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(`Failed to create spot: ${res.status} ${errorData.error || res.statusText}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to create spot: ${response.status} ${errorData.error || response.statusText}`);
       }
-      const newSpot = await res.json();
+      const newSpot = await response.json();
+      pendingSpots.current.delete(tempSpotId);
       setHangoutSpots((prev) =>
         prev.map((spot) =>
           spot._id === tempSpotId
             ? {
-                ...newSpot,
+                _id: newSpot._id,
                 id: newSpot._id,
+                name: newSpot.name,
+                handle: newSpot.handle,
+                description: newSpot.description,
+                latitude: newSpot.location?.coordinates?.[1] ?? 0,
+                longitude: newSpot.location?.coordinates?.[0] ?? 0,
+                distanceInKm: newSpot.distanceInKm ?? 0,
+                members: newSpot.members || [],
                 icon: MessageCircle,
                 className: 'default',
-                members: newSpot.members || [],
-                latitude: newSpot.latitude,
-                longitude: newSpot.longitude,
               }
             : spot
         )
@@ -638,14 +680,16 @@ function App() {
     } catch (err) {
       console.error('Error creating spot:', err.message);
       setHangoutSpots((prev) => prev.filter((spot) => spot._id !== tempSpotId));
+      pendingSpots.current.delete(tempSpotId);
       setToast(`Failed to create spot: ${err.message}`);
       setTimeout(() => setToast(null), 5000);
     }
   };
 
+  // Join a spot
   const joinSpot = async (spotId) => {
     if (!username || !userId || !socketRef.current) {
-      console.error('Cannot join spot: missing username, userId, or socket', { username, userId });
+      console.error('Cannot join spot: missing data', { username, userId });
       return;
     }
     if (currentSpot) {
@@ -657,30 +701,27 @@ function App() {
     setActiveUsers([]);
     setEditingMessageId(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`, {
+      const response = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`Failed to fetch messages: ${res.status}`);
-      const data = await res.json();
+      if (!response.ok) throw new Error(`Failed to fetch messages: ${response.status}`);
+      const data = await response.json();
       const messagesWithUsernames = await Promise.all(
-        data.map(async (msg) => {
-          const resolvedUsername =
-            msg.username ||
-            usernameCache.current[msg.userId] ||
-            (await fetchUsername(msg.userId));
-          return {
-            ...msg,
-            username: resolvedUsername,
-          };
-        })
+        data.map(async (msg) => ({
+          ...msg,
+          username: msg.username || usernameCache.current[msg.userId] || (await fetchUsername(msg.userId)),
+        }))
       );
       setMessages(messagesWithUsernames);
     } catch (err) {
       console.error('Error fetching messages:', err.message);
+      setToast('Failed to load messages');
+      setTimeout(() => setToast(null), 5000);
     }
     navigate('/');
   };
 
+  // Handle login
   const handleLogin = ({ userId, username, token, mood }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('userId', userId);
@@ -694,6 +735,7 @@ function App() {
     navigate('/');
   };
 
+  // Handle logout
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
@@ -712,14 +754,16 @@ function App() {
     setUnreadMessages(0);
     setHasFetchedFriends(false);
     setHasFetchedChats(false);
+    usernameCache.current = {};
+    pendingSpots.current.clear();
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
-    usernameCache.current = {};
     navigate('/');
   };
 
+  // Send spot message
   const sendMessage = (message) => {
     if (!message || !currentSpot || !username || !userId || !socketRef.current) {
       console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
@@ -734,6 +778,7 @@ function App() {
     socketRef.current.emit('send-message', { message, spotId: currentSpot, userId, username });
   };
 
+  // Send DM
   const sendDm = (message, otherUserId) => {
     if (!message || !otherUserId || !username || !userId || !socketRef.current) {
       console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
@@ -754,11 +799,13 @@ function App() {
     socketRef.current.emit('send-dm', { message, otherUserId, userId, username });
   };
 
+  // Start editing a message
   const startEditing = (messageId, currentText) => {
     setEditingMessageId(messageId);
     setEditedMessageText(currentText);
   };
 
+  // Save edited message
   const saveEdit = (messageId, otherUserId = null) => {
     if (!editedMessageText || !socketRef.current) return;
     if (otherUserId) {
@@ -775,20 +822,20 @@ function App() {
     } else if (currentSpot) {
       socketRef.current.emit('edit-message', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
       setMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === messageId ? { ...msg, message: editedMessageText } : msg
-        )
+        prev.map((msg) => (msg._id === messageId ? { ...msg, message: editedMessageText } : msg))
       );
     }
     setEditingMessageId(null);
     setEditedMessageText('');
   };
 
+  // Cancel editing
   const cancelEdit = () => {
     setEditingMessageId(null);
     setEditedMessageText('');
   };
 
+  // Delete message
   const deleteMessage = (messageId, otherUserId = null) => {
     if (!socketRef.current) return;
     if (otherUserId) {
@@ -806,6 +853,7 @@ function App() {
     }
   };
 
+  // Handle typing indicator
   const handleTyping = (e, otherUserId = null) => {
     if (e.target.value && username && userId && socketRef.current) {
       if (otherUserId) {
@@ -816,9 +864,10 @@ function App() {
     }
   };
 
+  // Handle friend request response
   const handleFriendRequestResponse = async (requestId, accept) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/friends/response`, {
+      const response = await fetch(`${BACKEND_URL}/api/friends/response`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -826,11 +875,10 @@ function App() {
         },
         body: JSON.stringify({ requestId, accept }),
       });
-      if (!res.ok) throw new Error(`Failed to respond to friend request: ${res.status} ${res.statusText}`);
-      const data = await res.json();
+      if (!response.ok) throw new Error(`Failed to respond to friend request: ${response.status}`);
       setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
       if (accept) {
-        fetchFriends();
+        await fetchFriends();
         const request = friendRequests.find((req) => req.requestId === requestId);
         if (request) {
           setToast(`Added ${request.senderUsername} as a friend`);
@@ -847,24 +895,60 @@ function App() {
     }
   };
 
+  // Update user profile
+  const updateProfile = async (profileData) => {
+    if (!token || !userId) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to update profile: ${response.status} ${errorData.error || response.statusText}`);
+      }
+      const updatedUser = await response.json();
+      setUsername(updatedUser.username);
+      setUserStatus(updatedUser.mood || 'chill');
+      localStorage.setItem('username', updatedUser.username);
+      localStorage.setItem('mood', updatedUser.mood || 'chill');
+      usernameCache.current[userId] = updatedUser.username;
+      setToast('Profile updated successfully');
+      setTimeout(() => setToast(null), 5000);
+      fetchSpots(); // Refresh spots after location update
+    } catch (err) {
+      console.error('Error updating profile:', err.message);
+      setToast('Failed to update profile');
+      setTimeout(() => setToast(null), 5000);
+    }
+  };
+
+  // SpotCard component
   const SpotCard = ({ spot }) => (
-    <div
-      className={`spot-card ${spot.className} fade-in`}
-      onClick={() => joinSpot(spot._id)}
-    >
+    <div className={`spot-card ${spot.className} fade-in`} onClick={() => joinSpot(spot._id)}>
       <div className="spot-card-header">
         <div className="spot-card-info">
           <div className="spot-icon">
             <MessageCircle size={20} color="#374151" />
           </div>
           <div className="spot-details">
-            <h3>{spot.name} (@{spot.handle})</h3>
+            <h3>
+              {spot.name} (@{spot.handle})
+            </h3>
             <p>{spot.description}</p>
             <p>
               <strong>Location:</strong>{' '}
-              {spot.latitude != null && spot.longitude != null
+              {spot.latitude && spot.longitude
                 ? `${parseFloat(spot.latitude).toFixed(4)}, ${parseFloat(spot.longitude).toFixed(4)}`
                 : 'Unknown'}
+            </p>
+            <p>
+              <strong>Distance:</strong>{' '}
+              {typeof spot.distanceInKm === 'number' ? `${spot.distanceInKm.toFixed(1)} km from you` : 'Unknown'}
             </p>
           </div>
         </div>
@@ -879,14 +963,16 @@ function App() {
     </div>
   );
 
+  // Render login if not authenticated
   if (!token || !userId || !username) {
     return (
-      <GoogleOAuthProvider clientId={'934486146442-9hj1qubb9bc6nlkuhog6thd8nb3pif2u.apps.googleusercontent.com'}>
+      <GoogleOAuthProvider clientId="934486146442-9hj1qubb9bc6nlkuhog6thd8nb3pif2u.apps.googleusercontent.com">
         <Auth onLogin={handleLogin} />
       </GoogleOAuthProvider>
     );
   }
 
+  // Main app render
   return (
     <div className="App">
       {toast && (
@@ -920,11 +1006,7 @@ function App() {
             <div className="user-avatar">
               <span>{username ? username[0].toUpperCase() : 'U'}</span>
             </div>
-            <button
-              onClick={() => navigate('/create-spot')}
-              className="create-spot-button"
-              title="Create a new spot"
-            >
+            <button onClick={() => navigate('/create-spot')} className="create-spot-button" title="Create a new spot">
               <PlusCircle size={20} color="#6b7280" />
             </button>
             <button onClick={handleLogout} className="logout-button">
@@ -958,19 +1040,21 @@ function App() {
               activeTab === 'spots' && !currentSpot ? (
                 <div>
                   <div className="section-header">
-                    <h2>Available Hangout Spots</h2>
-                    <p style={{ color: 'white' }}>Drop into any space that matches your vibe</p>
+                    <h2>Nearby Hangout Spots</h2>
+                    <p style={{ color: 'white' }}>Drop into spaces near you</p>
                   </div>
                   <div className="spots-container">
-                    {hangoutSpots.map((spot) => (
-                      <SpotCard key={spot._id} spot={spot} />
-                    ))}
+                    {hangoutSpots.length === 0 ? (
+                      <p>No spots found nearby.</p>
+                    ) : (
+                      hangoutSpots.map((spot) => <SpotCard key={spot._id} spot={spot} />)
+                    )}
                   </div>
                 </div>
               ) : activeTab === 'spots' && currentSpot ? (
                 <div className="chat-container">
                   <div className="section-header">
-                    <h2>Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name}</h2>
+                    <h2>Chatting in {hangoutSpots.find((s) => s._id === currentSpot)?.name || 'Spot'}</h2>
                     <button
                       style={{ color: 'white' }}
                       className="back-button"
@@ -987,18 +1071,16 @@ function App() {
                   </div>
                   <div className="active-users">
                     <p style={{ color: 'white' }}>
-                      Active Users: {activeUsers.map((u) => u.username).join(', ') || ''}
+                      Active Users: {activeUsers.map((u) => u.username).join(', ') || 'None'}
                     </p>
                   </div>
                   <div className="typing-indicator">
                     {typingUsers.length > 0 && (
                       <p>
-                        {typingUsers.map((u) => u.username).join(', ')}{' '}
-                        {typingUsers.length > 1 ? 'are' : 'is'} typing...
+                        {typingUsers.map((u) => u.username).join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
                       </p>
                     )}
                   </div>
-
                   <div className="messages">
                     {messages.map((msg, idx) => {
                       const formatTime = (timestamp) => {
@@ -1006,13 +1088,8 @@ function App() {
                         const date = new Date(timestamp);
                         const now = new Date();
                         const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
-
                         if (diffInHours < 24) {
-                          return date.toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true,
-                          });
+                          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
                         } else if (diffInHours < 168) {
                           return date.toLocaleDateString([], {
                             weekday: 'short',
@@ -1020,22 +1097,18 @@ function App() {
                             minute: '2-digit',
                             hour12: true,
                           });
-                        } else {
-                          return date.toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true,
-                          });
                         }
+                        return date.toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        });
                       };
 
                       return (
-                        <div
-                          key={msg._id || idx}
-                          className={`message ${msg.userId === userId ? 'own' : ''}`}
-                        >
+                        <div key={msg._id || idx} className={`message ${msg.userId === userId ? 'own' : ''}`}>
                           <div className="message-bubble">
                             <span
                               className="message-user"
@@ -1102,7 +1175,6 @@ function App() {
                     })}
                     <div ref={messagesEndRef} />
                   </div>
-
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -1135,10 +1207,7 @@ function App() {
               <main className="main-content">
                 <div className="section-header">
                   <h2>Create a New Spot</h2>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="back-button"
-                  >
+                  <button onClick={() => navigate('/')} className="back-button">
                     Back to Spots
                   </button>
                 </div>
@@ -1148,7 +1217,6 @@ function App() {
                       e.preventDefault();
                       const latitude = parseFloat(e.target.latitude.value) || 0;
                       const longitude = parseFloat(e.target.longitude.value) || 0;
-
                       const spotData = {
                         name: e.target.name.value.trim(),
                         handle: e.target.handle.value.trim(),
@@ -1156,13 +1224,12 @@ function App() {
                         latitude,
                         longitude,
                       };
-
                       if (spotData.name && spotData.handle && spotData.description) {
                         createSpot(spotData);
                         e.target.reset();
                         setDescriptionLength(0);
                       } else {
-                        setToast("Please fill out all required fields");
+                        setToast('Please fill out all required fields');
                         setTimeout(() => setToast(null), 5000);
                       }
                     }}
@@ -1195,9 +1262,7 @@ function App() {
                         onChange={(e) => setDescriptionLength(e.target.value.length)}
                         required
                       />
-                      <span className="character-counter">
-                        {descriptionLength}/200
-                      </span>
+                      <span className="character-counter">{descriptionLength}/200</span>
                     </div>
                     <input
                       type="number"
@@ -1221,24 +1286,20 @@ function App() {
                       type="button"
                       onClick={() => {
                         if (!navigator.geolocation) {
-                          setToast("Geolocation is not supported by your browser");
+                          setToast('Geolocation is not supported by your browser');
                           setTimeout(() => setToast(null), 5000);
                           return;
                         }
                         navigator.geolocation.getCurrentPosition(
                           (position) => {
-                            document.querySelector('input[name="latitude"]').value =
-                              position.coords.latitude;
-                            document.querySelector('input[name="longitude"]').value =
-                              position.coords.longitude;
-                            setToast(
-                              `📍 Location set: ${position.coords.latitude}, ${position.coords.longitude}`
-                            );
+                            document.querySelector('input[name="latitude"]').value = position.coords.latitude;
+                            document.querySelector('input[name="longitude"]').value = position.coords.longitude;
+                            setToast(`📍 Location set: ${position.coords.latitude}, ${position.coords.longitude}`);
                             setTimeout(() => setToast(null), 5000);
                           },
                           (error) => {
-                            console.error("Geolocation error:", error.message);
-                            setToast("Failed to get your location");
+                            console.error('Geolocation error:', error.message);
+                            setToast('Failed to get your location');
                             setTimeout(() => setToast(null), 5000);
                           }
                         );
@@ -1261,18 +1322,11 @@ function App() {
               <main className="main-content">
                 <div className="section-header">
                   <h2>User Profile</h2>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="back-button"
-                  >
+                  <button onClick={() => navigate('/')} className="back-button">
                     Back to Spots
                   </button>
                 </div>
-                <ProfileWrapper
-                  userId={userId}
-                  token={token}
-                  fetchUsername={fetchUsername}
-                />
+                <ProfileWrapper userId={userId} token={token} fetchUsername={fetchUsername} />
               </main>
             }
           />
@@ -1288,11 +1342,7 @@ function App() {
                   username={username}
                   token={token}
                   statusMoods={statusMoods}
-                  onUpdate={(updated) => {
-                    setUsername(updated.username);
-                    setUserStatus(updated.mood);
-                    usernameCache.current[userId] = updated.username;
-                  }}
+                  onUpdate={updateProfile}
                 />
               </main>
             }
@@ -1391,22 +1441,16 @@ function App() {
               <main className="main-content">
                 <div className="section-header">
                   <h2>
-                    Chat with{' '}
-                    {friends.find((f) => f.userId === location.pathname.split('/')[2])?.username || 'User'}
+                    Chat with {friends.find((f) => f.userId === location.pathname.split('/')[2])?.username || 'User'}
                   </h2>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="back-button"
-                  >
+                  <button onClick={() => navigate('/')} className="back-button">
                     Back to Spots
                   </button>
                 </div>
                 <div className="chat-container">
                   <div className="typing-indicator">
                     {dmTypingUsers[location.pathname.split('/')[2]] && (
-                      <p>
-                        {dmTypingUsers[location.pathname.split('/')[2]].username} is typing...
-                      </p>
+                      <p>{dmTypingUsers[location.pathname.split('/')[2]].username} is typing...</p>
                     )}
                   </div>
                   <div className="messages">
@@ -1416,13 +1460,8 @@ function App() {
                         const date = new Date(timestamp);
                         const now = new Date();
                         const diffInHours = Math.abs(now - date) / (1000 * 60 * 60);
-
                         if (diffInHours < 24) {
-                          return date.toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true,
-                          });
+                          return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
                         } else if (diffInHours < 168) {
                           return date.toLocaleDateString([], {
                             weekday: 'short',
@@ -1430,22 +1469,18 @@ function App() {
                             minute: '2-digit',
                             hour12: true,
                           });
-                        } else {
-                          return date.toLocaleDateString([], {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true,
-                          });
                         }
+                        return date.toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        });
                       };
 
                       return (
-                        <div
-                          key={msg._id || idx}
-                          className={`message ${msg.senderId === userId ? 'own' : ''}`}
-                        >
+                        <div key={msg._id || idx} className={`message ${msg.senderId === userId ? 'own' : ''}`}>
                           <div className="message-bubble">
                             <span
                               className="message-user"
@@ -1584,7 +1619,7 @@ function App() {
         </div>
       </nav>
 
-      <div className="bottom-padding"></div>
+      <div className="bottom-padding" />
     </div>
   );
 }
