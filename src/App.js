@@ -17,7 +17,7 @@ import Profile from './Profile';
 import ViewProfile from './ViewProfile';
 import './App.css';
 
-export const BACKEND_URL = 'https://hangr-backend.onrender.com'||'http://localhost:5000';
+export const BACKEND_URL = 'https://hangr-backend.onrender.com' || 'http://localhost:5000';
 
 // ProfileWrapper for handling dynamic userId in profile route
 const ProfileWrapper = ({ userId, token, fetchUsername }) => {
@@ -112,7 +112,7 @@ function App() {
         usernameCache.current[id] = data.username || id;
         return data.username || id;
       } catch (err) {
-        //console.error('Error fetching username:', err.message);
+        console.error('Error fetching username:', err.message);
         return id;
       }
     },
@@ -135,7 +135,7 @@ function App() {
       });
       setHasFetchedFriends(true);
     } catch (err) {
-      //console.error('Error fetching friends:', err.message);
+      console.error('Error fetching friends:', err.message);
       setToast('Failed to load friends');
       setTimeout(() => setToast(null), 5000);
     } finally {
@@ -162,7 +162,7 @@ function App() {
       );
       setUnreadMessages((prev) => prev + requests.length);
     } catch (err) {
-      //console.error('Error fetching friend requests:', err.message);
+      console.error('Error fetching friend requests:', err.message);
       setToast('Failed to load friend requests');
       setTimeout(() => setToast(null), 5000);
     }
@@ -192,7 +192,7 @@ function App() {
           [otherUserId]: messagesWithUsernames,
         }));
       } catch (err) {
-        //console.error('Error fetching DMs:', err.message);
+        console.error('Error fetching DMs:', err.message);
         setToast('Failed to load conversation');
         setTimeout(() => setToast(null), 5000);
       }
@@ -222,6 +222,7 @@ function App() {
   useEffect(() => {
     if (!token || socketRef.current) return;
 
+    console.log('Setting up Socket.IO connection');
     socketRef.current = io(BACKEND_URL, {
       withCredentials: true,
       reconnection: true,
@@ -232,10 +233,27 @@ function App() {
 
     socketRef.current.on('connect', () => {
       console.log('Socket.IO connected:', socketRef.current.id, 'for userId:', userId);
+      // Rejoin current spot if it exists
+      if (currentSpot) {
+        console.log('Rejoining spot on connect:', currentSpot);
+        socketRef.current.emit('join-spot', { spotId: currentSpot, userId, username });
+      }
+    });
+
+    socketRef.current.on('reconnect_attempt', (attempt) => {
+      console.log('Socket.IO reconnect attempt:', attempt);
+    });
+
+    socketRef.current.on('reconnect', () => {
+      console.log('Socket.IO reconnected');
+      if (currentSpot) {
+        console.log('Rejoining spot on reconnect:', currentSpot);
+        socketRef.current.emit('join-spot', { spotId: currentSpot, userId, username });
+      }
     });
 
     socketRef.current.on('connect_error', (err) => {
-      //console.error('Socket.IO connection error:', err.message);
+      console.error('Socket.IO connection error:', err.message);
       if (err.message.includes('Token expired')) {
         setToast('Session expired, please log in again');
         localStorage.removeItem('token');
@@ -253,7 +271,14 @@ function App() {
       }
     });
 
+    socketRef.current.on('error', ({ message }) => {
+      console.error('Socket.IO error:', message);
+      setToast(`Error: ${message}`);
+      setTimeout(() => setToast(null), 5000);
+    });
+
     socketRef.current.on('friend-request', ({ senderId, senderUsername, requestId }) => {
+      console.log('Received friend-request:', { senderId, senderUsername, requestId });
       setFriendRequests((prev) => {
         if (!prev.some((req) => req.requestId === requestId)) {
           usernameCache.current[senderId] = senderUsername;
@@ -267,6 +292,7 @@ function App() {
     });
 
     socketRef.current.on('friend-request-accepted', ({ senderId, senderUsername, receiverId, receiverUsername }) => {
+      console.log('Received friend-request-accepted:', { senderId, senderUsername, receiverId, receiverUsername });
       setFriendRequests((prev) =>
         prev.filter((req) => (userId === senderId ? req.senderId !== receiverId : req.senderId !== senderId))
       );
@@ -294,6 +320,7 @@ function App() {
     });
 
     socketRef.current.on('friend-request-rejected', ({ requestId }) => {
+      console.log('Received friend-request-rejected:', { requestId });
       setFriendRequests((prev) => prev.filter((req) => req.requestId !== requestId));
       setToast('A friend request was rejected');
       setUnreadMessages((prev) => Math.max(0, prev - 1));
@@ -301,27 +328,34 @@ function App() {
     });
 
     socketRef.current.on('new-message', async ({ message, userId: senderId, username, timestamp, spotId, _id }) => {
+      console.log('Received new-message:', { spotId, currentSpot, message, senderId, _id });
       const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
       if (spotId === currentSpot) {
         setMessages((prev) => {
-          const optimisticMsg = prev.find(
-            (msg) => msg.message === message && msg.userId === senderId && msg.isOptimistic
-          );
+          // Replace optimistic message if it exists
+          const optimisticMsg = prev.find((msg) => msg.isOptimistic && msg.userId === senderId && msg.message === message);
           if (optimisticMsg) {
+            console.log('Replacing optimistic message:', optimisticMsg._id, 'with:', _id);
             return prev.map((msg) =>
               msg === optimisticMsg ? { message, userId: senderId, username: resolvedUsername, timestamp, _id } : msg
             );
           }
-          if (!prev.some((msg) => msg.message === message && msg.userId === senderId && msg.timestamp === timestamp)) {
+          // Add new message if it doesn't exist
+          if (!prev.some((msg) => msg._id === _id)) {
+            console.log('Adding new message:', { message, senderId, _id });
             return [...prev, { message, userId: senderId, username: resolvedUsername, timestamp, _id }];
           }
+          console.log('Message already exists:', _id);
           return prev;
         });
+      } else {
+        console.log('Message ignored: spotId does not match currentSpot');
+        if (activeTab !== 'chats') setUnreadMessages((prev) => prev + 1);
       }
-      if (activeTab !== 'chats') setUnreadMessages((prev) => prev + 1);
     });
 
     socketRef.current.on('message-updated', ({ messageId, updatedMessage, timestamp, spotId }) => {
+      console.log('Received message-updated:', { messageId, updatedMessage, spotId });
       if (spotId === currentSpot) {
         setMessages((prev) =>
           prev.map((msg) => (msg._id === messageId ? { ...msg, message: updatedMessage, timestamp } : msg))
@@ -330,12 +364,14 @@ function App() {
     });
 
     socketRef.current.on('message-deleted', ({ messageId, spotId }) => {
+      console.log('Received message-deleted:', { messageId, spotId });
       if (spotId === currentSpot) {
         setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
       }
     });
 
     socketRef.current.on('typing', ({ userId, username, spotId }) => {
+      console.log('Received typing:', { userId, username, spotId });
       if (spotId === currentSpot) {
         setTypingUsers((prev) => {
           if (!prev.some((u) => u.userId === userId)) {
@@ -350,15 +386,18 @@ function App() {
     });
 
     socketRef.current.on('new-dm', async ({ _id, message, senderId, username, otherUserId, timestamp }) => {
+      console.log('Received new-dm:', { _id, message, senderId, otherUserId });
       const resolvedUsername = username || usernameCache.current[senderId] || (await fetchUsername(senderId));
       const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
       setDmMessages((prev) => {
         const key = senderId === userId ? otherUserId : senderId;
         const chatMessages = prev[key] || [];
+        // Replace optimistic message if it exists
         const optimisticMsg = chatMessages.find(
-          (msg) => msg.message === message && msg.senderId === senderId && msg.isOptimistic
+          (msg) => msg.isOptimistic && msg.senderId === senderId && msg.message === message
         );
         if (optimisticMsg) {
+          console.log('Replacing optimistic DM:', optimisticMsg._id, 'with:', _id);
           return {
             ...prev,
             [key]: chatMessages.map((msg) =>
@@ -366,12 +405,15 @@ function App() {
             ),
           };
         }
-        if (!chatMessages.some((msg) => msg.message === message && msg.senderId === senderId && msg.timestamp === timestamp)) {
+        // Add new DM if it doesn't exist
+        if (!chatMessages.some((msg) => msg._id === _id)) {
+          console.log('Adding new DM:', { _id, message, senderId });
           return {
             ...prev,
             [key]: [...chatMessages, { _id, message, senderId, username: resolvedUsername, timestamp }],
           };
         }
+        console.log('DM already exists:', _id);
         return prev;
       });
       if (chatUserId !== (senderId === userId ? otherUserId : senderId) && activeTab !== 'chats') {
@@ -382,6 +424,7 @@ function App() {
     });
 
     socketRef.current.on('dm-updated', ({ messageId, updatedMessage, timestamp, otherUserId }) => {
+      console.log('Received dm-updated:', { messageId, updatedMessage, otherUserId });
       setDmMessages((prev) => {
         const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
         const chatMessages = prev[key] || [];
@@ -395,6 +438,7 @@ function App() {
     });
 
     socketRef.current.on('dm-deleted', ({ messageId, otherUserId }) => {
+      console.log('Received dm-deleted:', { messageId, otherUserId });
       setDmMessages((prev) => {
         const key = userId === otherUserId ? location.pathname.split('/')[2] : otherUserId;
         const chatMessages = prev[key] || [];
@@ -406,6 +450,7 @@ function App() {
     });
 
     socketRef.current.on('dm-typing', ({ userId: senderId, username, otherUserId }) => {
+      console.log('Received dm-typing:', { senderId, username, otherUserId });
       const chatUserId = location.pathname.startsWith('/chat/') ? location.pathname.split('/')[2] : null;
       if (chatUserId === (senderId === userId ? otherUserId : senderId)) {
         setDmTypingUsers((prev) => ({
@@ -423,6 +468,7 @@ function App() {
     });
 
     socketRef.current.on('user-joined-spot', ({ userId: joinedUserId, spotId, username }) => {
+      console.log('Received user-joined-spot:', { userId: joinedUserId, spotId, username });
       setHangoutSpots((prev) =>
         prev.map((spot) =>
           spot._id === spotId
@@ -446,6 +492,7 @@ function App() {
     });
 
     socketRef.current.on('user-left-spot', ({ userId: leftUserId, spotId }) => {
+      console.log('Received user-left-spot:', { userId: leftUserId, spotId });
       setHangoutSpots((prev) =>
         prev.map((spot) =>
           spot._id === spotId
@@ -459,6 +506,7 @@ function App() {
     });
 
     socketRef.current.on('new-spot', ({ spotId, _id, name, handle, description, location, members, username, creatorId }) => {
+      console.log('Received new-spot:', { spotId, name, handle, creatorId });
       setHangoutSpots((prev) => {
         // Skip if spot already exists
         if (prev.some((spot) => spot._id === spotId)) {
@@ -489,7 +537,7 @@ function App() {
               : spot
           );
         }
-        // Add new spot if not created by current user and not already in state
+        // Add new spot if not created by current user
         return [
           ...prev,
           {
@@ -513,15 +561,14 @@ function App() {
       }
     });
 
-    socketRef.current.on('error', ({ message }) => {
-      setToast(`Error: ${message}`);
-      setTimeout(() => setToast(null), 5000);
-    });
-
     return () => {
       if (socketRef.current) {
+        console.log('Disconnecting Socket.IO');
         socketRef.current.off('connect');
+        socketRef.current.off('reconnect_attempt');
+        socketRef.current.off('reconnect');
         socketRef.current.off('connect_error');
+        socketRef.current.off('error');
         socketRef.current.off('friend-request');
         socketRef.current.off('friend-request-accepted');
         socketRef.current.off('friend-request-rejected');
@@ -536,12 +583,11 @@ function App() {
         socketRef.current.off('user-joined-spot');
         socketRef.current.off('user-left-spot');
         socketRef.current.off('new-spot');
-        socketRef.current.off('error');
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
-  }, [token, activeTab, currentSpot, userId, location, navigate, fetchUsername]);
+  }, [token, activeTab, currentSpot, userId, username, location, navigate, fetchUsername]);
 
   // Handle auth callback
   useEffect(() => {
@@ -618,10 +664,9 @@ function App() {
           className: 'default',
         }))
       );
-      // Clear any pending optimistic spots that might not have been resolved
       pendingSpots.current.clear();
     } catch (err) {
-      //console.error('Error fetching nearby spots:', err.message);
+      console.error('Error fetching nearby spots:', err.message);
       setToast('Failed to load nearby spots');
       setTimeout(() => setToast(null), 5000);
     }
@@ -648,7 +693,7 @@ function App() {
       latitude: spotData.latitude,
       longitude: spotData.longitude,
       distanceInKm: 0,
-      members: [userId], // Include creator in members
+      members: [userId],
       icon: MessageCircle,
       className: 'default',
       isOptimistic: true,
@@ -694,7 +739,7 @@ function App() {
       setTimeout(() => setToast(null), 5000);
       navigate('/');
     } catch (err) {
-      //console.error('Error creating spot:', err.message);
+      console.error('Error creating spot:', err.message);
       setHangoutSpots((prev) => prev.filter((spot) => spot._id !== tempSpotId));
       pendingSpots.current.delete(tempSpotId);
       setToast(`Failed to create spot: ${err.message}`);
@@ -705,18 +750,22 @@ function App() {
   // Join a spot
   const joinSpot = async (spotId) => {
     if (!username || !userId || !socketRef.current) {
-      //console.error('Cannot join spot: missing data', { username, userId });
+      console.error('Cannot join spot: missing data', { username, userId });
       return;
     }
     if (currentSpot) {
+      console.log('Leaving current spot:', currentSpot);
       socketRef.current.emit('leave-spot', { spotId: currentSpot, userId });
     }
+    console.log('Joining spot:', spotId);
+    setCurrentSpot(spotId); // Set currentSpot first
     socketRef.current.emit('join-spot', { spotId, userId, username });
-    setCurrentSpot(spotId);
     setMessages([]);
     setActiveUsers([]);
+    setTypingUsers([]);
     setEditingMessageId(null);
     try {
+      console.log('Fetching messages for spot:', spotId);
       const response = await fetch(`${BACKEND_URL}/api/spots/${spotId}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -728,9 +777,10 @@ function App() {
           username: msg.username || usernameCache.current[msg.userId] || (await fetchUsername(msg.userId)),
         }))
       );
+      console.log('Messages fetched:', messagesWithUsernames);
       setMessages(messagesWithUsernames);
     } catch (err) {
-      //console.error('Error fetching messages:', err.message);
+      console.error('Error fetching messages:', err.message);
       setToast('Failed to load messages');
       setTimeout(() => setToast(null), 5000);
     }
@@ -765,6 +815,8 @@ function App() {
     setMessages([]);
     setDmMessages({});
     setActiveUsers([]);
+    setTypingUsers([]);
+    setDmTypingUsers({});
     setFriends([]);
     setFriendRequests([]);
     setUnreadMessages(0);
@@ -782,7 +834,7 @@ function App() {
   // Send spot message
   const sendMessage = (message) => {
     if (!message || !currentSpot || !username || !userId || !socketRef.current) {
-     // console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
+      console.error('Cannot send message: missing data', { message, currentSpot, username, userId });
       return;
     }
     const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -791,13 +843,14 @@ function App() {
       ...prev,
       { message, userId, username, timestamp: tempTimestamp, _id: tempMessageId, isOptimistic: true },
     ]);
+    console.log('Sending message:', { message, spotId: currentSpot, userId, username });
     socketRef.current.emit('send-message', { message, spotId: currentSpot, userId, username });
   };
 
   // Send DM
   const sendDm = (message, otherUserId) => {
     if (!message || !otherUserId || !username || !userId || !socketRef.current) {
-     // console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
+      console.error('Cannot send DM: missing data', { message, otherUserId, username, userId });
       return;
     }
     const tempMessageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -812,6 +865,7 @@ function App() {
         ],
       };
     });
+    console.log('Sending DM:', { message, otherUserId, userId, username });
     socketRef.current.emit('send-dm', { message, otherUserId, userId, username });
   };
 
@@ -825,6 +879,7 @@ function App() {
   const saveEdit = (messageId, otherUserId = null) => {
     if (!editedMessageText || !socketRef.current) return;
     if (otherUserId) {
+      console.log('Saving edited DM:', { messageId, updatedMessage: editedMessageText, otherUserId });
       socketRef.current.emit('edit-dm', { messageId, updatedMessage: editedMessageText, otherUserId });
       setDmMessages((prev) => {
         const chatMessages = prev[otherUserId] || [];
@@ -836,6 +891,7 @@ function App() {
         };
       });
     } else if (currentSpot) {
+      console.log('Saving edited message:', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
       socketRef.current.emit('edit-message', { messageId, updatedMessage: editedMessageText, spotId: currentSpot });
       setMessages((prev) =>
         prev.map((msg) => (msg._id === messageId ? { ...msg, message: editedMessageText } : msg))
@@ -855,6 +911,7 @@ function App() {
   const deleteMessage = (messageId, otherUserId = null) => {
     if (!socketRef.current) return;
     if (otherUserId) {
+      console.log('Deleting DM:', { messageId, otherUserId });
       socketRef.current.emit('delete-dm', { messageId, otherUserId });
       setDmMessages((prev) => {
         const chatMessages = prev[otherUserId] || [];
@@ -864,6 +921,7 @@ function App() {
         };
       });
     } else if (currentSpot) {
+      console.log('Deleting message:', { messageId, spotId: currentSpot });
       socketRef.current.emit('delete-message', { messageId, spotId: currentSpot });
       setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
     }
@@ -873,8 +931,10 @@ function App() {
   const handleTyping = (e, otherUserId = null) => {
     if (e.target.value && username && userId && socketRef.current) {
       if (otherUserId) {
+        console.log('Emitting dm-typing:', { userId, username, otherUserId });
         socketRef.current.emit('dm-typing', { userId, username, otherUserId });
       } else if (currentSpot) {
+        console.log('Emitting typing:', { userId, username, spotId: currentSpot });
         socketRef.current.emit('typing', { userId, username, spotId: currentSpot });
       }
     }
@@ -905,7 +965,7 @@ function App() {
       setUnreadMessages((prev) => Math.max(0, prev - 1));
       setTimeout(() => setToast(null), 5000);
     } catch (err) {
-      //console.error('Error responding to friend request:', err.message);
+      console.error('Error responding to friend request:', err.message);
       setToast('Error processing friend request');
       setTimeout(() => setToast(null), 5000);
     }
@@ -937,7 +997,7 @@ function App() {
       setTimeout(() => setToast(null), 5000);
       fetchSpots();
     } catch (err) {
-     // console.error('Error updating profile:', err.message);
+      console.error('Error updating profile:', err.message);
       setToast('Failed to update profile');
       setTimeout(() => setToast(null), 5000);
     }
@@ -956,12 +1016,6 @@ function App() {
               {spot.name} (@{spot.handle})
             </h3>
             <p>{spot.description}</p>
-            <p>
-              {/*<strong>Location:</strong>{' '}
-              {spot.latitude && spot.longitude
-                ? `${parseFloat(spot.latitude).toFixed(4)}, ${parseFloat(spot.longitude).toFixed(4)}`
-                : 'Unknown'} */}
-            </p>
             <p>
               <strong>Distance:</strong>{' '}
               {typeof spot.distanceInKm === 'number' ? `${spot.distanceInKm.toFixed(1)} km from you` : 'Unknown'}
@@ -1314,7 +1368,7 @@ function App() {
                             setTimeout(() => setToast(null), 5000);
                           },
                           (error) => {
-                            //console.error('Geolocation error:', error.message);
+                            console.error('Geolocation error:', error.message);
                             setToast('Failed to get your location');
                             setTimeout(() => setToast(null), 5000);
                           }
