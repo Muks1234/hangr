@@ -1112,7 +1112,7 @@ function App() {
                   </div>
                   <div className="spots-container">
                     {hangoutSpots.length === 0 ? (
-                      <p>No spots found nearby.</p>
+                      <p>No spots nearby? Update your location in your profile or create a spot using the (+) button in the Nav Bar.</p>
                     ) : (
                       hangoutSpots.map((spot) => <SpotCard key={spot._id} spot={spot} />)
                     )}
