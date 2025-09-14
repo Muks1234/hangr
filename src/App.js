@@ -1428,16 +1428,52 @@ function App() {
                     <div className="no-friends-message">No friends yet. Start connecting!</div>
                   ) : (
                     <div>
-                      {friends.map((friend) => (
-                        <div
-                          key={friend.userId}
-                          onClick={() => navigate(`/chat/${friend.userId}`)}
-                          className="friend-item"
-                        >
-                          <span>{friend.username}</span>
-                        </div>
-                      ))}
-                    </div>
+  <style>
+    {`
+      .friends-scroll::-webkit-scrollbar {
+        width: 4px;   /* thin scrollbar */
+      }
+      .friends-scroll::-webkit-scrollbar-thumb {
+        background-color: white; /* scrollbar thumb color */
+        border-radius: 10px;
+      }
+      .friends-scroll::-webkit-scrollbar-track {
+        background: transparent; /* invisible track */
+      }
+
+      /* Firefox */
+      .friends-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: white transparent;
+      }
+    `}
+  </style>
+
+  <div
+    className="friends-scroll"
+    style={{
+      maxHeight: "200px",   // keeps it scrollable when content grows
+      width: "100%",        // responsive width
+      maxWidth: "100%",
+      overflowY: "auto",
+      overflowX: "hidden",
+      border: "1px solid #ccc",
+      padding: "10px",
+      boxSizing: "border-box"
+    }}
+  >
+    {friends.map((friend) => (
+      <div
+        key={friend.userId}
+        onClick={() => navigate(`/chat/${friend.userId}`)}
+        className="friend-item"
+      >
+        <span>{friend.username}</span>
+      </div>
+    ))}
+  </div>
+</div>
+
                   )}
                   <div className="section-header">
                     <h2>Friend Requests</h2>
@@ -1478,15 +1514,49 @@ function App() {
             element={
               <main className="main-content">
                 <div className="chats-container">
+  <style>
+    {`
+      .chats-list::-webkit-scrollbar {
+        width: 4px;   /* thin scrollbar */
+      }
+      .chats-list::-webkit-scrollbar-thumb {
+        background-color: white; /* scrollbar color */
+        border-radius: 10px;
+      }
+      .chats-list::-webkit-scrollbar-track {
+        background: transparent; /* make track invisible */
+      }
+
+      /* For Firefox */
+      .chats-list {
+        scrollbar-width: thin;
+        scrollbar-color: white transparent;
+      }
+    `}
+  </style>
+
   <div className="section-header">
     <h2>Chats</h2>
   </div>
+
   {isLoadingChats ? (
     <div className="loading">Loading chats...</div>
   ) : friends.length === 0 ? (
     <div className="no-friends-message">No friends yet. Start connecting!</div>
   ) : (
-    <div className="chats-list">
+    <div
+      className="chats-list"
+      style={{
+        maxHeight: "200px",
+        width: "100%",
+        maxWidth: "100%",
+        overflowY: "auto",
+        overflowX: "hidden",
+        border: "1px solid #ccc",
+        padding: "10px",
+        boxSizing: "border-box"
+      }}
+    >
       {friends.map((friend) => (
         <div
           key={friend.userId}
@@ -1499,6 +1569,7 @@ function App() {
     </div>
   )}
 </div>
+
 
               </main>
             }
