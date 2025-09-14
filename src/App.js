@@ -1108,11 +1108,11 @@ function App() {
                 <div>
                   <div className="section-header">
                     <h2>Nearby Hangout Spots</h2>
-                    <p style={{ color: 'white' }}>Drop into spaces near you</p>
+                    <p style={{ color: 'white' }}>Drop into chatrooms near you</p>
                   </div>
                   <div className="spots-container">
                     {hangoutSpots.length === 0 ? (
-                      <p>No spots nearby? Update your location in your profile or create a spot using the (+) button in the Nav Bar.</p>
+                      <p>No chatrooms nearby? Update your location in your profile or create your own chatroom using the (+) button in the Nav Bar.</p>
                     ) : (
                       hangoutSpots.map((spot) => <SpotCard key={spot._id} spot={spot} />)
                     )}
