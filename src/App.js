@@ -1478,27 +1478,28 @@ function App() {
             element={
               <main className="main-content">
                 <div className="chats-container">
-                  <div className="section-header">
-                    <h2>Chats</h2>
-                  </div>
-                  {isLoadingChats ? (
-                    <div className="loading">Loading chats...</div>
-                  ) : friends.length === 0 ? (
-                    <div className="no-friends-message">No friends yet. Start connecting!</div>
-                  ) : (
-                    <div>
-                      {friends.map((friend) => (
-                        <div
-                          key={friend.userId}
-                          onClick={() => navigate(`/chat/${friend.userId}`)}
-                          className="friend-item"
-                        >
-                          <span>{friend.username}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+  <div className="section-header">
+    <h2>Chats</h2>
+  </div>
+  {isLoadingChats ? (
+    <div className="loading">Loading chats...</div>
+  ) : friends.length === 0 ? (
+    <div className="no-friends-message">No friends yet. Start connecting!</div>
+  ) : (
+    <div className="chats-list">
+      {friends.map((friend) => (
+        <div
+          key={friend.userId}
+          onClick={() => navigate(`/chat/${friend.userId}`)}
+          className="friend-item"
+        >
+          <span>{friend.username}</span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
               </main>
             }
           />

@@ -15,14 +15,12 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Generate avatar based on userId
   const generateAvatar = () => {
     if (!userId) return '';
     const svg = Multiavatar(userId);
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   };
 
-  // Fetch profile data
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
@@ -30,7 +28,10 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
         const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error(`Failed to fetch profile: ${res.status}`);
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(`Failed to fetch profile: ${res.status} ${errorData.error || res.statusText}`);
+        }
         const data = await res.json();
         setProfile({
           username: data.username || username,
@@ -42,6 +43,7 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
         });
       } catch (err) {
         console.error('Error fetching profile:', err.message);
+        alert(`Failed to fetch profile: ${err.message}`);
       } finally {
         setLoading(false);
       }
@@ -49,35 +51,53 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
     if (token) fetchProfile();
   }, [token, username]);
 
-  // Update location with browser geolocation
   const updateLocation = async () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
       return;
     }
-
+    if (!userId) {
+      alert('User ID is missing. Please log in again.');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        const { latitude, longitude } = position.coords;
         try {
+          console.log('Sending location update:', { userId, latitude, longitude });
           const res = await fetch(`${BACKEND_URL}/api/users/location`, {
             method: 'PUT',
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            }),
+            body: JSON.stringify({ latitude, longitude }),
           });
-
-          if (!res.ok) throw new Error(`Failed to update location: ${res.status}`);
-          const updatedProfile = await res.json();
-          setProfile((prev) => ({ ...prev, ...updatedProfile }));
+          const responseText = await res.text();
+          console.log('Location update response:', res.status, responseText);
+          if (!res.ok) {
+            let errorData;
+            try {
+              errorData = JSON.parse(responseText);
+            } catch {
+              throw new Error(`Failed to update location: ${res.status} ${responseText}`);
+            }
+            throw new Error(`Failed to update location: ${res.status} ${errorData.error || responseText}`);
+          }
+          const updatedProfile = JSON.parse(responseText);
+          setProfile((prev) => ({
+            ...prev,
+            username: updatedProfile.username || prev.username,
+            mood: updatedProfile.mood || prev.mood,
+            latitude: updatedProfile.latitude ?? prev.latitude,
+            longitude: updatedProfile.longitude ?? prev.longitude,
+            location: updatedProfile.location || prev.location,
+          }));
+          if (onUpdate) onUpdate(updatedProfile);
           alert('📍 Location updated!');
         } catch (err) {
           console.error('Update location error:', err.message);
-          alert('Failed to update location.');
+          alert(`Failed to update location: ${err.message}`);
         }
       },
       (error) => {
@@ -87,7 +107,6 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
     );
   };
 
-  // Handle save
   const handleSave = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/users/profile`, {
@@ -103,14 +122,18 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
           bio: profile.bio,
         }),
       });
-      if (!res.ok) throw new Error(`Failed to save profile: ${res.status}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(`Failed to save profile: ${res.status} ${errorData.error || res.statusText}`);
+      }
       const updatedProfile = await res.json();
       setProfile(updatedProfile);
       setIsEditing(false);
       if (onUpdate) onUpdate(updatedProfile);
+      alert('Profile saved!');
     } catch (err) {
       console.error('Save error:', err.message);
-      alert('Failed to save profile. Check the console for details.');
+      alert(`Failed to save profile: ${err.message}`);
     }
   };
 
@@ -124,7 +147,6 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
       <div className="profile-avatar">
         <img src={profile.avatar || generateAvatar()} alt="Avatar" />
       </div>
-
       {isEditing ? (
         <div className="profile-form">
           <input
@@ -174,7 +196,6 @@ const Profile = ({ userId, username, token, statusMoods, onUpdate }) => {
           <p><strong>Bio:</strong> {profile.bio || 'No bio yet'}</p>
           <p><strong>Latitude:</strong> {profile.latitude}</p>
           <p><strong>Longitude:</strong> {profile.longitude}</p>
-
           <div className="profile-actions">
             <button onClick={() => setIsEditing(true)} className="edit-profile-button">
               <Edit size={16} /> Edit Profile
