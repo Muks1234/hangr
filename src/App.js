@@ -1431,35 +1431,62 @@ function App() {
   <style>
     {`
       .friends-scroll::-webkit-scrollbar {
-        width: 4px;   /* thin scrollbar */
+        width: 6px;
       }
       .friends-scroll::-webkit-scrollbar-thumb {
-        background-color: white; /* scrollbar thumb color */
-        border-radius: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.2);
+      }
+      .friends-scroll::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
       }
       .friends-scroll::-webkit-scrollbar-track {
-        background: transparent; /* invisible track */
+        background: rgba(0,0,0,0.05);
+        border-radius: 12px;
       }
-
-      /* Firefox */
       .friends-scroll {
         scrollbar-width: thin;
-        scrollbar-color: white transparent;
+        scrollbar-color: #667eea rgba(0,0,0,0.05);
+      }
+      .friend-item {
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+        border: 1px solid rgba(102, 126, 234, 0.1);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 500;
+        color: #4a5568;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      }
+      .friend-item:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #ffffff;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        border-color: transparent;
+      }
+      .friend-item:active {
+        transform: translateY(0px);
       }
     `}
   </style>
-
   <div
     className="friends-scroll"
     style={{
-      maxHeight: "200px",   // keeps it scrollable when content grows
-      width: "100%",        // responsive width
+      maxHeight: "280px",
+      width: "100%",
       maxWidth: "100%",
       overflowY: "auto",
       overflowX: "hidden",
-      border: "1px solid #ccc",
-      padding: "10px",
-      boxSizing: "border-box"
+      background: "rgba(248, 249, 255, 0.6)",
+      border: "1px solid rgba(102, 126, 234, 0.15)",
+      borderRadius: "16px",
+      padding: "16px",
+      boxSizing: "border-box",
+      backdropFilter: "blur(10px)"
     }}
   >
     {friends.map((friend) => (
@@ -1473,7 +1500,6 @@ function App() {
     ))}
   </div>
 </div>
-
                   )}
                   <div className="section-header">
                     <h2>Friend Requests</h2>
@@ -1513,32 +1539,70 @@ function App() {
             path="/chats"
             element={
               <main className="main-content">
-                <div className="chats-container">
+  <div className="chats-container">
   <style>
     {`
       .chats-list::-webkit-scrollbar {
-        width: 4px;   /* thin scrollbar */
+        width: 6px;
       }
       .chats-list::-webkit-scrollbar-thumb {
-        background-color: white; /* scrollbar color */
-        border-radius: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.2);
+      }
+      .chats-list::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
       }
       .chats-list::-webkit-scrollbar-track {
-        background: transparent; /* make track invisible */
+        background: rgba(0,0,0,0.05);
+        border-radius: 12px;
       }
-
-      /* For Firefox */
       .chats-list {
         scrollbar-width: thin;
-        scrollbar-color: white transparent;
+        scrollbar-color: #667eea rgba(0,0,0,0.05);
+      }
+      .chats-container .friend-item {
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+        border: 1px solid rgba(102, 126, 234, 0.1);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 500;
+        color: #4a5568;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      }
+      .chats-container .friend-item:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #ffffff;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        border-color: transparent;
+      }
+      .chats-container .friend-item:active {
+        transform: translateY(0px);
+      }
+      .no-friends-message {
+        padding: 20px;
+        text-align: center;
+        color: #667084;
+        font-style: italic;
+        background: rgba(248, 249, 255, 0.4);
+        border-radius: 12px;
+        border: 1px dashed rgba(102, 126, 234, 0.2);
+      }
+      .loading {
+        padding: 20px;
+        text-align: center;
+        color: #667eea;
+        font-weight: 500;
       }
     `}
   </style>
-
   <div className="section-header">
     <h2>Chats</h2>
   </div>
-
   {isLoadingChats ? (
     <div className="loading">Loading chats...</div>
   ) : friends.length === 0 ? (
@@ -1547,14 +1611,17 @@ function App() {
     <div
       className="chats-list"
       style={{
-        maxHeight: "200px",
+        maxHeight: "280px",
         width: "100%",
         maxWidth: "100%",
         overflowY: "auto",
         overflowX: "hidden",
-        border: "1px solid #ccc",
-        padding: "10px",
-        boxSizing: "border-box"
+        background: "rgba(248, 249, 255, 0.6)",
+        border: "1px solid rgba(102, 126, 234, 0.15)",
+        borderRadius: "16px",
+        padding: "16px",
+        boxSizing: "border-box",
+        backdropFilter: "blur(10px)"
       }}
     >
       {friends.map((friend) => (
