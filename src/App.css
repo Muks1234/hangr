@@ -3902,3 +3902,56 @@ body {
     border-radius: 16px;
   }
 }
+
+/*for scrolling*/
+/* New styles for scrollable spots container */
+.spots-container {
+  max-height: calc(100vh - 300px); /* Adjust based on header, status bar, and nav height */
+  overflow-y: auto; /* Enable vertical scrolling */
+  padding-right: 8px; /* Space for scrollbar */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #3b82f6 #e5e7eb; /* Blue thumb on gray track */
+}
+
+/* Webkit browsers (Chrome, Safari) */
+.spots-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.spots-container::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.spots-container::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 4px;
+}
+
+.spots-container::-webkit-scrollbar-thumb:hover {
+  background: #2563eb;
+}
+
+/* Mobile adjustments (iPhone SE: 320px width) */
+@media (max-width: 375px) {
+  .spots-container {
+    max-height: calc(100vh - 250px); /* Tighter for small screens */
+    gap: 12px; /* Smaller gap for compact layout */
+  }
+}
+
+/* Tablet and larger mobile screens (376px - 768px) */
+@media (min-width: 376px) and (max-width: 768px) {
+  .spots-container {
+    max-height: calc(100vh - 280px);
+    gap: 16px;
+  }
+}
+
+/* Desktop screens (769px+) */
+@media (min-width: 769px) {
+  .spots-container {
+    max-height: calc(100vh - 320px); /* More space on larger screens */
+    gap: 20px;
+  }
+}
