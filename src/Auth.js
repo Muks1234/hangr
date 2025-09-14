@@ -97,7 +97,7 @@ function Auth({ onLogin }) {
     <div className="auth-container">
       <div className="auth-card fade-in">
         <h2>{isLogin ? 'Login' : 'Sign Up'}</h2>
-        <p>{isLogin ? 'Welcome back to Hangr!' : 'Join the Hangr vibe!'}</p>
+        <p>{isLogin ? 'Hangr – Chatrooms where your city hangs out.' : 'Join the Hangr vibe!'}</p>
         {error && <p className="error-message">{error}</p>}
         <form onSubmit={handleSubmit} className="auth-form">
           {!isLogin && (
