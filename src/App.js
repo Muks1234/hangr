@@ -1656,7 +1656,7 @@ function App() {
                 <div className="chat-container">
                   <div className="typing-indicator">
                     {dmTypingUsers[location.pathname.split('/')[2]] && (
-                      <p>{dmTypingUsers[location.pathname.split('/')[2]].username} is typing...</p>
+                      <p style={{ color: 'yellow' }}>{dmTypingUsers[location.pathname.split('/')[2]].username} is typing...</p>
                     )}
                   </div>
                   <div className="messages">
