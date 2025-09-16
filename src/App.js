@@ -1143,7 +1143,7 @@ function App() {
                   </div>
                   <div className="typing-indicator">
                     {typingUsers.length > 0 && (
-                      <p>
+                      <p  style={{ color: 'yellow', fontStyle: 'italic' }}>
                         {typingUsers.map((u) => u.username).join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
                       </p>
                     )}
@@ -1656,7 +1656,7 @@ function App() {
                 <div className="chat-container">
                   <div className="typing-indicator">
                     {dmTypingUsers[location.pathname.split('/')[2]] && (
-                      <p style={{ color: 'yellow' }}>{dmTypingUsers[location.pathname.split('/')[2]].username} is typing...</p>
+                      <p style={{ color: 'yellow', fontStyle: 'italic' }}>{dmTypingUsers[location.pathname.split('/')[2]].username} is typing...</p>
                     )}
                   </div>
                   <div className="messages">
